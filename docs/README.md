@@ -18,3 +18,5 @@
 10. [菜单栏托盘与品牌图标](delivery/05-菜单栏托盘与品牌图标.md)
 
 11. [定时任务调研与需求分析清单](requirements/02-定时任务调研与需求分析清单.md)
+
+12. [定时任务交互原型与设计图](prototypes/tasks/README.md) · [直接打开原型](prototypes/tasks/index.html)
