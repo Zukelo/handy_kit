@@ -32,3 +32,5 @@
 17. [Windows 脚本路径修复（0.1.2）](delivery/09-Windows脚本路径修复.md)
 
 18. [Windows 脚本目录执行与诊断（0.1.3）](delivery/10-Windows脚本目录执行与诊断.md)
+
+19. [Windows Bash 启动上下文与预检（0.1.4）](delivery/11-WindowsBash上下文预检.md)

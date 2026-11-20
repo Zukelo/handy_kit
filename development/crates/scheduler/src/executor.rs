@@ -126,6 +126,40 @@ fn executable_file(path: &std::path::Path, execute: bool) -> Result<(), String> 
     Ok(())
 }
 #[cfg(windows)]
+const WINDOWS_BASH_RUNNER: &str = r#"
+_hk_directory=$1
+_hk_script=$2
+shift 2
+if ! builtin cd -- "$_hk_directory"; then
+  builtin printf '[HandyKit预检失败] Bash 无法进入工作目录：%s\n' "$_hk_directory" >&2
+  builtin pwd -P >&2
+  exit 125
+fi
+if ! { exec 3< "$_hk_script"; }; then
+  builtin printf '[HandyKit预检失败] Bash 无法打开脚本：%s\n' "$_hk_script" >&2
+  builtin printf '[HandyKit] Bash 实际目录：' >&2
+  builtin pwd -P >&2
+  exit 127
+fi
+exec 3<&-
+exec "$BASH" --noprofile --norc -- "$_hk_script" "$@"
+"#;
+#[cfg(windows)]
+fn is_bash(interpreter: &std::path::Path) -> bool {
+    interpreter
+        .file_name()
+        .is_some_and(|n| n.eq_ignore_ascii_case("bash.exe"))
+}
+#[cfg(windows)]
+fn use_bash_runner(task: &Task, interpreter: &std::path::Path) -> bool {
+    is_bash(interpreter)
+        && !task
+            .action
+            .env
+            .iter()
+            .any(|e| e.key.eq_ignore_ascii_case("BASH_ENV") || e.key.eq_ignore_ascii_case("ENV"))
+}
+#[cfg(windows)]
 fn windows_shell(selected: &std::path::Path) -> Result<std::path::PathBuf, String> {
     let name = selected
         .file_name()
@@ -135,7 +169,7 @@ fn windows_shell(selected: &std::path::Path) -> Result<std::path::PathBuf, Strin
     if name == "git-bash.exe" {
         let root = selected.parent().ok_or("Git Bash 安装目录无效")?;
         for relative in ["usr/bin/bash.exe", "bin/bash.exe"] {
-            let candidate = root.join(relative);
+            let candidate: std::path::PathBuf = root.join(relative).components().collect();
             if candidate.is_file() {
                 return Ok(candidate);
             }
@@ -169,7 +203,7 @@ fn windows_shell(selected: &std::path::Path) -> Result<std::path::PathBuf, Strin
             }
         }
     }
-    Ok(selected.into())
+    Ok(selected.components().collect())
 }
 #[cfg(windows)]
 fn shell_path(path: &str) -> String {
@@ -263,7 +297,31 @@ fn command(task: &Task) -> Result<Command, String> {
         let c = {
             let interpreter = windows_shell(std::path::Path::new(&a.interpreter))?;
             let mut c = Command::new(&interpreter);
-            c.arg("--").arg(script_argument(task, &interpreter)?);
+            let script = script_argument(task, &interpreter)?;
+            if use_bash_runner(task, &interpreter) {
+                let cwd = if a.cwd.is_empty() {
+                    std::path::Path::new(&a.target)
+                        .parent()
+                        .ok_or("脚本目录无效")?
+                } else {
+                    std::path::Path::new(&a.cwd)
+                };
+                let directory = interpreter_script_path(&interpreter, &cwd.to_string_lossy())?;
+                c.args([
+                    "--noprofile",
+                    "--norc",
+                    "-c",
+                    WINDOWS_BASH_RUNNER,
+                    "handykit-runner",
+                ])
+                .arg(directory)
+                .arg(script);
+                // Do not silently execute inherited Bash initialization files in background tasks.
+                // Explicit per-task overrides below still take precedence.
+                c.env_remove("BASH_ENV").env_remove("ENV").env_remove("PWD");
+            } else {
+                c.arg("--").arg(script);
+            }
             let parent = interpreter.parent().ok_or("解释器目录无效")?;
             let mut paths = vec![parent.to_path_buf()];
             if parent
@@ -279,7 +337,7 @@ fn command(task: &Task) -> Result<Command, String> {
                     } else {
                         root
                     };
-                    for path in [root.join("usr/bin"), root.join("bin")] {
+                    for path in [root.join("usr").join("bin"), root.join("bin")] {
                         if path.is_dir() && !paths.contains(&path) {
                             paths.push(path);
                         }
@@ -638,7 +696,16 @@ pub fn execute(task: &Task, ctrl: Arc<Control>) -> Outcome {
         result.message.push_str(&format!(
             "；实际解释器：{}；Windows 读取检查：通过；脚本路径：{}；工作目录：{}",
             cmd.get_program().to_string_lossy(),
-            cmd.get_args().nth(1).unwrap_or_default().to_string_lossy(),
+            cmd.get_args()
+                .nth(
+                    if use_bash_runner(task, std::path::Path::new(cmd.get_program())) {
+                        6
+                    } else {
+                        1
+                    }
+                )
+                .unwrap_or_default()
+                .to_string_lossy(),
             cmd.get_current_dir()
                 .unwrap_or(std::path::Path::new("."))
                 .display()
@@ -665,5 +732,68 @@ mod windows_tests {
         for terminal in ["mintty.exe", "cmd.exe", "git-cmd.exe", "pwsh.exe"] {
             assert!(windows_shell(&std::path::Path::new(r"C:\tools").join(terminal)).is_err());
         }
+    }
+}
+
+#[cfg(all(test, windows))]
+mod bash_context_tests {
+    use super::*;
+    use std::os::windows::process::CommandExt;
+    #[test]
+    fn runner_sets_real_bash_directory_and_classifies_open_failures() {
+        let root = std::env::var_os("HANDYKIT_TEST_GIT_ROOT")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| r"C:\Program Files\Git".into());
+        let bash = root.join("usr/bin/bash.exe");
+        if !bash.is_file() {
+            assert!(
+                std::env::var_os("GITHUB_ACTIONS").is_none(),
+                "CI requires Git Bash"
+            );
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("handykit-context-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("identity script.sh"),"test -f \"$0\" || exit 91; test \"$0\" = \"${BASH_SOURCE[0]}\" || exit 92; printf context-ok\n").unwrap();
+        let desired = interpreter_script_path(&bash, &dir.to_string_lossy()).unwrap();
+        let run = |cwd: &str, script: &str| {
+            Command::new(&bash)
+                .args([
+                    "--noprofile",
+                    "--norc",
+                    "-c",
+                    WINDOWS_BASH_RUNNER,
+                    "handykit-runner",
+                    cwd,
+                    script,
+                ])
+                .current_dir(std::env::temp_dir())
+                .env_remove("BASH_ENV")
+                .env_remove("ENV")
+                .env("PWD", r"C:\wrong-inherited-directory")
+                .stdin(Stdio::null())
+                .creation_flags(0x08000000)
+                .output()
+                .unwrap()
+        };
+        let ok = run(&desired, "./identity script.sh");
+        assert!(
+            ok.status.success(),
+            "{}",
+            String::from_utf8_lossy(&ok.stderr)
+        );
+        assert_eq!(ok.stdout, b"context-ok");
+        let no_file = run(&desired, "./missing-script.sh");
+        assert_eq!(no_file.status.code(), Some(127));
+        assert!(String::from_utf8_lossy(&no_file.stderr)
+            .contains("[HandyKit预检失败] Bash 无法打开脚本"));
+        let no_dir = run(
+            "/handykit-directory-that-does-not-exist",
+            "./identity script.sh",
+        );
+        assert_eq!(no_dir.status.code(), Some(125));
+        assert!(String::from_utf8_lossy(&no_dir.stderr)
+            .contains("[HandyKit预检失败] Bash 无法进入工作目录"));
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
