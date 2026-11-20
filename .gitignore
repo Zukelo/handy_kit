@@ -17,3 +17,4 @@ __pycache__/
 *.pyc
 release-assets/
 development/apps/desktop/src-tauri/gen/
+builds/

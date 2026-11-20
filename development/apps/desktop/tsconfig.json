@@ -5,14 +5,20 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "lib": [
-      "ES2021",
-      "DOM"
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
     ],
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true
   },
   "include": [
     "src",
     "vite.config.ts"
+  ],
+  "exclude": [
+    "src/**/*.test.ts"
   ]
 }

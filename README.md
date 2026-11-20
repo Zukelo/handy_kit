@@ -9,7 +9,7 @@
 - `database/`：SQL 迁移、测试种子、开发数据和备份；真实数据库不提交。
 - `scripts/`：初始化与校验脚本。
 
-从 [文档入口](docs/README.md) 开始。当前交付为工程骨架、设计基线与 GUI 交互原型，不代表全部工具已实现。
+从 [文档入口](docs/README.md) 开始。当前已实现桌面框架与首页：分类导航、多标签工作区、收藏、常用工具、最近打开和工作区恢复。五个具体工具暂为占位页。
 
 直接打开 [GUI 交互原型](docs/prototypes/index.html) 可查看首页、分类菜单与多标签工作区，无需安装依赖。
 
@@ -42,3 +42,13 @@ npm run build:offline
 本机开发包：`npm run build:dev`（debug 可执行文件）或 `npm run package:dev`（本机 debug 安装包）。版本标签 `v*` 由 GitHub Actions 构建 Windows、macOS 和 Linux 安装包并发布到 Releases，日常提交只做基础检查。
 
 详见 [Git 与版本发布流程](docs/delivery/03-Git与版本发布流程.md)。
+
+## 本机 App
+
+```sh
+cd development/apps/desktop
+npm test
+npm run package:local
+```
+
+macOS Apple Silicon 的开发 App 输出到 `builds/darwin-arm64/HandyKit.app`，可以直接双击运行。详见 [框架与首页开发交付](docs/delivery/04-框架与首页开发交付.md)。
