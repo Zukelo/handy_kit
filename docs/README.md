@@ -30,3 +30,5 @@
 16. [Windows 控制台与 sh 脚本修复（0.1.1）](delivery/08-Windows控制台与sh脚本修复.md)
 
 17. [Windows 脚本路径修复（0.1.2）](delivery/09-Windows脚本路径修复.md)
+
+18. [Windows 脚本目录执行与诊断（0.1.3）](delivery/10-Windows脚本目录执行与诊断.md)

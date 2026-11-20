@@ -448,7 +448,7 @@ fn git_bash_d_drive_script_path() {
     let script = dir.join("sync code-merge.sh");
     std::fs::write(
         &script,
-        "printf 'd-drive-ok'; printf 'retained-error' >&2; exit 17\n",
+        "test -f \"$0\" || exit 91; test \"${BASH_SOURCE[0]}\" = \"$0\" || exit 92; printf 'd-drive-ok'; printf 'retained-error' >&2; exit 17\n",
     )
     .unwrap();
     let task = Task {
@@ -472,9 +472,20 @@ fn git_bash_d_drive_script_path() {
     };
     let task = f.service.save(task).unwrap();
     let run = done(&f.service, &f.service.run_now(&task.id).unwrap());
-    let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(run.exit_code, Some(17), "{} / {}", run.message, run.stderr);
     assert_eq!(run.stdout, "d-drive-ok");
     assert_eq!(run.stderr, "retained-error");
+    assert!(
+        run.message.contains("./sync code-merge.sh"),
+        "{}",
+        run.message
+    );
+    assert!(run.message.contains("Windows 读取检查：通过"));
+    let mut custom = task.clone();
+    custom.action.cwd = f.dir.to_string_lossy().into();
+    let custom = f.service.save(custom).unwrap();
+    let run = done(&f.service, &f.service.run_now(&custom.id).unwrap());
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(run.exit_code, Some(17), "{} / {}", run.message, run.stderr);
     assert!(run.message.contains("/d/"), "{}", run.message);
 }

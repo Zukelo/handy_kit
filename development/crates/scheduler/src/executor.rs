@@ -215,6 +215,29 @@ fn interpreter_script_path(interpreter: &std::path::Path, target: &str) -> Resul
     }
     Ok(path.into())
 }
+#[cfg(windows)]
+fn script_argument(task: &Task, interpreter: &std::path::Path) -> Result<String, String> {
+    let target = std::path::Path::new(&task.action.target);
+    // Native validation distinguishes a Windows read failure from an MSYS path failure.
+    std::fs::File::open(target)
+        .map_err(|e| format!("Windows 无法读取脚本 {}：{e}", target.display()))?;
+    let parent = target.parent().ok_or("脚本目录无效")?;
+    let uses_parent = task.action.cwd.is_empty()
+        || std::fs::canonicalize(&task.action.cwd)
+            .ok()
+            .zip(std::fs::canonicalize(parent).ok())
+            .is_some_and(|(a, b)| a == b);
+    if uses_parent {
+        // Windows creates the process in this directory. A relative filename avoids drive mounts.
+        let name = target
+            .file_name()
+            .ok_or("脚本文件名无效")?
+            .to_str()
+            .ok_or("脚本文件名无法解码")?;
+        return Ok(format!("./{name}"));
+    }
+    interpreter_script_path(interpreter, &task.action.target)
+}
 fn command(task: &Task) -> Result<Command, String> {
     let a = &task.action;
     #[cfg(target_os = "macos")]
@@ -240,8 +263,7 @@ fn command(task: &Task) -> Result<Command, String> {
         let c = {
             let interpreter = windows_shell(std::path::Path::new(&a.interpreter))?;
             let mut c = Command::new(&interpreter);
-            c.arg("--")
-                .arg(interpreter_script_path(&interpreter, &a.target)?);
+            c.arg("--").arg(script_argument(task, &interpreter)?);
             let parent = interpreter.parent().ok_or("解释器目录无效")?;
             let mut paths = vec![parent.to_path_buf()];
             if parent
@@ -614,9 +636,12 @@ pub fn execute(task: &Task, ctrl: Arc<Control>) -> Outcome {
     #[cfg(windows)]
     if task.action.kind == "script" {
         result.message.push_str(&format!(
-            "；实际解释器：{}；脚本路径：{}",
+            "；实际解释器：{}；Windows 读取检查：通过；脚本路径：{}；工作目录：{}",
             cmd.get_program().to_string_lossy(),
-            cmd.get_args().nth(1).unwrap_or_default().to_string_lossy()
+            cmd.get_args().nth(1).unwrap_or_default().to_string_lossy(),
+            cmd.get_current_dir()
+                .unwrap_or(std::path::Path::new("."))
+                .display()
         ));
     }
     result
