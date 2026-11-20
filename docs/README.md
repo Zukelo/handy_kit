@@ -34,3 +34,5 @@
 18. [Windows 脚本目录执行与诊断（0.1.3）](delivery/10-Windows脚本目录执行与诊断.md)
 
 19. [Windows Bash 启动上下文与预检（0.1.4）](delivery/11-WindowsBash上下文预检.md)
+
+20. [Git → ZIP → SVN 同步诊断脚本与使用说明](../development/examples/code-sync/README.md)
