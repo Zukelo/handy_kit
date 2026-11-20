@@ -6,6 +6,11 @@ import subprocess
 import tempfile
 import struct
 import zlib
+import re
+import shutil
+from design_palette import TOKENS, resolve
+
+PALETTE=TOKENS['themes']['light']
 
 OUT = Path(__file__).resolve().parents[1] / 'docs/prototypes/tasks/designs'
 INK = '#526b43'
@@ -40,28 +45,37 @@ def crop_top_png(source, destination, height):
 
 
 def rect(x, y, w, h, fill='#fff', stroke=LINE, r=6):
+    field_fill=fill=='#fcfdfb'
+    fill=resolve(PALETTE,fill,'surface')
+    stroke=PALETTE['control-border'] if field_fill else resolve(PALETTE,stroke,'border')
     return f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{r}" fill="{fill}" stroke="{stroke}"/>'
 
 
 def text(x, y, value, size=12, color=INK, weight=400, mono=False):
-    font = 'SFMono-Regular,Menlo,monospace' if mono else 'PingFang SC,Microsoft YaHei,sans-serif'
+    font = 'SFMono-Regular,Menlo,monospace' if mono else '-apple-system,SF Pro Text,PingFang SC,Microsoft YaHei,sans-serif'
+    color=resolve(PALETTE,color,'text')
+    size=max(size,11)
     return f'<text x="{x}" y="{y}" fill="{color}" font-family="{font}" font-size="{size}" font-weight="{weight}">{escape(str(value))}</text>'
 
 
 def line(x1, y1, x2, y2):
-    return f'<path d="M{x1} {y1}H{x2}" stroke="{LINE}"/>' if y1 == y2 else f'<path d="M{x1} {y1}L{x2} {y2}" stroke="{LINE}"/>'
+    return f'<path d="M{x1} {y1}H{x2}" stroke="{PALETTE['separator']}"/>' if y1 == y2 else f'<path d="M{x1} {y1}L{x2} {y2}" stroke="{PALETTE['separator']}"/>'
 
 
 def button(x, y, w, label, primary=False):
-    return rect(x, y, w, 34, '#4d7951' if primary else '#fff', '#4d7951' if primary else LINE, 5) + text(x+13, y+22, label, 11, '#fff' if primary else '#80986b')
+    return rect(x,y,w,34,'accent' if primary else 'surface-raised','control-border',6)+text(x+13,y+22,label,12,'on-accent' if primary else 'text-primary')
 
 
 def field(x, y, w, label, value):
-    return text(x, y, label, 11, '#8ba077') + rect(x, y+12, w, 37, '#fcfdfb') + text(x+12, y+36, value, 12, '#779461')
+    return text(x, y, label, 11, '#8ba077') + rect(x, y+12, w, 37, 'field','control-border') + text(x+12, y+36, value, 12, '#779461')
 
 
 def badge(x, y, value, color='#86a46c', fill='#edf5e5', width=64):
-    return rect(x, y-14, width, 23, fill, fill, 4) + text(x+9, y+1, value, 9, color)
+    role='danger' if '失败' in value else 'purple' if '启动请求' in value else 'success' if '成功' in value else 'info' if value=='执行中' else None
+    color=role or ('selection-text' if value=='已启用' else 'text-secondary')
+    background=f'{role}-bg' if role else ('selection' if value=='已启用' else 'surface-inset')
+    width=max(width,len(value)*11+18)
+    return rect(x,y-14,width,23,background,background,4)+text(x+9,y+1,value,11,color)
 
 
 def frame(title, subtitle, board):
@@ -164,7 +178,7 @@ def history_board():
         y=457+i*63
         s+=text(250,y,name,12,'#8ca675')+text(250,y+18,'配置 v1 · 计划触发',9,'#b6c4a7')+text(465,y,'11/20 09:00',10,'#a1b68c',mono=True)+text(620,y,'计划触发',10,'#a9bb96')+badge(737,y,status,'#b48d72' if i==2 else '#95af7d',width=100)+text(909,y,'—' if i==1 else '2.4 s / 0',10,'#a8bb94',mono=True)+text(1120,y,'查看详情 ↗',11,'#93ad7a')+line(246,y+31,1328,y+31)
     # Drawer is deliberately part of this static screen design, not a captured running application.
-    s+='<rect x="205" y="130" width="1175" height="761" fill="#374829" opacity=".12"/>'
+    s+=f'<rect x="205" y="130" width="1175" height="761" fill="{PALETTE["backdrop"]}"/>'
     s+=rect(815,130,565,761,'#fcfdfb',LINE,0)+text(842,164,'RUN DETAIL / SIMULATED',10,'#a4b991',mono=True)+text(842,203,'执行详情',24,'#73905b',500)+text(1334,169,'×',22,'#a8ba96')+text(842,234,'打开开发工作区 · 2026/11/20 09:00:00',11,'#a3b58f')+badge(842,270,'启动请求成功','#a28ab4','#f2edf7',110)
     for i,(label,value) in enumerate([('触发来源','计划示例'),('执行耗时','—'),('退出码','不适用')]):
         x=842+i*168
@@ -174,20 +188,34 @@ def history_board():
     return s+'</svg>'
 
 
+def write_board(path,svg,png=False):
+    path.parent.mkdir(parents=True,exist_ok=True)
+    path.write_text(svg,encoding='utf-8')
+    if png:
+        width,height=map(int,re.search(r'width="(\d+)" height="(\d+)"',svg).groups())
+        with tempfile.TemporaryDirectory(prefix='handykit-design-') as temporary:
+            square=Path(temporary)/path.name
+            square.write_text(svg.replace(f'height="{height}" viewBox="0 0 {width} {height}"',f'height="{width}" viewBox="0 0 {width} {width}"',1),encoding='utf-8')
+            subprocess.run(['qlmanage','-t','-s','1600','-o',temporary,str(square)],check=True,timeout=30,stdout=subprocess.DEVNULL)
+            crop_top_png(Path(temporary)/f'{path.name}.png',path.with_suffix('.png'),round(1600*height/width))
+
+
 if __name__ == '__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--png',action='store_true',help='Also render PNG boards with macOS Quick Look')
     args=parser.parse_args()
-    OUT.mkdir(parents=True,exist_ok=True)
-    for name,build in [('01-task-list',list_board),('02-cron-builder',cron_board),('03-action-parameters',action_board),('04-execution-history',history_board)]:
-        path=OUT/f'{name}.svg'
-        path.write_text(build(),encoding='utf-8')
-        if args.png:
-            with tempfile.TemporaryDirectory(prefix='handykit-design-') as temporary:
-                # Quick Look crops wide SVGs to a square. Render on a square canvas,
-                # then export just the design's 1380:920 area from the top-left.
-                square=Path(temporary)/path.name
-                square.write_text(path.read_text().replace('height="920" viewBox="0 0 1380 920"','height="1380" viewBox="0 0 1380 1380"',1),encoding='utf-8')
-                subprocess.run(['qlmanage','-t','-s','1600','-o',temporary,str(square)],check=True,timeout=30,stdout=subprocess.DEVNULL)
-                crop_top_png(Path(temporary)/f'{path.name}.png',OUT/f'{name}.png',1067)
-        print(path.name)
+    for theme in ['light','dark']:
+        PALETTE=TOKENS['themes'][theme]
+        for name,build in [('01-task-list',list_board),('02-cron-builder',cron_board),('03-action-parameters',action_board),('04-execution-history',history_board)]:
+            path=OUT/theme/f'{name}.svg'
+            write_board(path,build(),args.png)
+            if theme=='light':
+                shutil.copy2(path,OUT/path.name)
+                if args.png:shutil.copy2(path.with_suffix('.png'),OUT/path.with_suffix('.png').name)
+            print(theme,name)
+    PALETTE=TOKENS['themes']['light']
+    light=cron_board().replace('<svg ','<svg x="0" y="0" ',1)
+    PALETTE=TOKENS['themes']['dark']
+    dark=cron_board().replace('<svg ','<svg x="1380" y="0" ',1)
+    comparison='<svg xmlns="http://www.w3.org/2000/svg" width="2760" height="920" viewBox="0 0 2760 920"><title>小工坊浅色与深色设计对照</title>'+light+dark+'</svg>'
+    write_board(OUT/'theme-comparison.svg',comparison,args.png)

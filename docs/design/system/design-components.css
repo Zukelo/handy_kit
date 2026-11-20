@@ -1,0 +1,106 @@
+/* Shared desktop component semantics. Layout stays in each workbench's stylesheet. */
+:root { --green: var(--hk-accent); --green-dark: var(--hk-accent-hover); --green-light: var(--hk-selection); --line: var(--hk-separator); --muted: var(--hk-text-secondary); --surface: var(--hk-surface); --mono: var(--hk-font-mono); }
+body { color: var(--hk-text-primary); background: var(--hk-canvas); font-family: var(--hk-font-sans); font-size: var(--hk-text-body); }
+button, input, select, textarea { font-family: inherit; transition: background-color var(--hk-duration), border-color var(--hk-duration), color var(--hk-duration); }
+.titlebar, .app-header { height: var(--hk-titlebar-height); background: var(--hk-toolbar); color: var(--hk-text-primary); border-color: var(--hk-separator); }
+.sidebar { background: var(--hk-sidebar); border-color: var(--hk-separator); }
+.workspace, #content, main, .home-panel, .tool-panel { background: var(--hk-canvas); }
+.tabbar, .workspace-tabs { background: var(--hk-toolbar); border-color: var(--hk-separator); min-height: var(--hk-tabbar-height); }
+.tab, .workspace-tab { background: var(--hk-toolbar); color: var(--hk-text-secondary); border-color: var(--hk-separator); }
+.tab.active, .workspace-tab.selected { background: var(--hk-surface); color: var(--hk-accent-text); }
+.tab.active::before { background: var(--hk-accent-text); }
+.workspace-tab.selected { border-top-color: var(--hk-accent-text); }
+.nav-home, .nav-item, .nav-tool { color: var(--hk-text-secondary); }
+.nav-home:hover, .nav-item:hover, .nav-tool:hover { background: var(--hk-hover); }
+.nav-home.selected, .nav-item.selected, .nav-tool.active { background: var(--hk-selection); color: var(--hk-selection-text); font-weight: 600; box-shadow: inset 3px 0 var(--hk-accent-text); }
+.nav-label, .group-toggle, .eyebrow, .subtle, .right-note, .preview-label, .section-heading h2 span, .stat-label { color: var(--hk-text-tertiary); font-size: var(--hk-text-caption); }
+h1, h2, h3, .welcome h1, .welcome h1 span, .tool-heading h1, .page-heading h1, .section-heading h2, .form-card h2, .dialog h2, .placeholder-card h2, .task-name { color: var(--hk-text-primary); }
+.welcome h1, .page-heading h1, .tool-heading h1 { font-size: var(--hk-text-title); letter-spacing: -0.3px; }
+.welcome p, .page-heading p, .tool-heading p, .sidebar-bottom p, .sidebar-note p, .card-link p, .card-tags, .subline, .field-hint, .card-description, .field-note, .preview-note, .preview-zone, .draft-note, .tip, .muted, .page-footnote, .home-footnote, .log-explanation, .history-callout { color: var(--hk-text-secondary); font-size: var(--hk-text-caption); line-height: 1.6; }
+.tool-card, .form-card, .cron-card, .stat-card, .editor-box, .table-card, .placeholder-card, .kind-card { background: var(--hk-surface); border-color: var(--hk-separator); border-radius: var(--hk-radius-card); }
+.tool-card:hover { border-color: var(--hk-control-border); transform: none; box-shadow: 0 2px 8px var(--hk-backdrop); }
+.card-link h3, .stat-value, .stat-card.running .stat-value, .stat-card.failed .stat-value { color: var(--hk-text-primary); }
+.tool-card .favorite, .favorite.is-favorite { color: var(--hk-accent-text); }
+.quick-item { color: var(--hk-text-primary); background: var(--hk-surface); border-color: var(--hk-separator); }
+.quick-item:hover { background: var(--hk-hover); }
+.quick-arrow, .quick-item .tool-icon, .nav-symbol, .tab-home { color: var(--hk-accent-text); }
+.button, .tool-toolbar button:not(.text-button), .actions button, .dialog-actions button:not(.text-button) { border-radius: var(--hk-radius-control); }
+.button, .actions button { background: var(--hk-surface-raised); color: var(--hk-text-primary); border: 1px solid var(--hk-control-border); min-height: var(--hk-control-height); }
+.button:hover:enabled, .actions button:hover:enabled { background: var(--hk-hover); }
+.button.primary, #format, .actions button:first-child { background: var(--hk-accent); color: var(--hk-on-accent); border-color: var(--hk-accent); }
+.button.primary:hover:enabled, #format:hover:enabled, .actions button:first-child:hover:enabled { background: var(--hk-accent-hover); border-color: var(--hk-accent-hover); }
+.button.primary:active:enabled { background: var(--hk-accent-active); }
+.button.danger, .text-button.danger { color: var(--hk-danger); }
+.button.danger { border-color: var(--hk-danger); background: var(--hk-danger-bg); }
+.button.soft { background: var(--hk-selection); color: var(--hk-selection-text); border-color: var(--hk-control-border); }
+.text-button, .log-link, .breadcrumb button, .page-breadcrumb button { color: var(--hk-accent-text); font-size: var(--hk-text-caption); }
+.text-button:hover:enabled, .log-link:hover { color: var(--hk-accent-text); text-decoration: underline; }
+.icon-button, .tab-close, .close-tab { color: var(--hk-text-secondary); min-height: var(--hk-control-height-small); min-width: var(--hk-control-height-small); }
+.icon-button:hover, .tab-close:hover, .close-tab:hover { color: var(--hk-text-primary); background: var(--hk-hover); }
+input:not([type="checkbox"]):not([type="radio"]), select, textarea { background: var(--hk-field); color: var(--hk-text-primary); border: 1px solid var(--hk-control-border); border-radius: var(--hk-radius-control); font-size: var(--hk-text-label); }
+input:not([type="checkbox"]):not([type="radio"]), select { min-height: var(--hk-control-height); }
+textarea { line-height: 1.6; }
+input::placeholder, textarea::placeholder { color: var(--hk-text-tertiary); opacity: 1; }
+button:disabled, input:disabled, select:disabled, textarea:disabled, .field-builder-row input:disabled { opacity: 1; color: var(--hk-text-disabled); background: var(--hk-disabled); cursor: not-allowed; }
+button:hover { filter: none; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--hk-accent); }
+.search-box, .search-field { background: var(--hk-field); border-color: var(--hk-control-border); color: var(--hk-text-tertiary); }
+.search-box input, .search-field input { border: 0 !important; background: transparent !important; min-height: 28px; }
+.field, label, .field-label, .detail-line dt, .setting-row h3, .parameters-heading h3 { color: var(--hk-text-secondary); font-size: var(--hk-text-label); }
+.field-error, .error, .required { color: var(--hk-danger) !important; }
+input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--hk-danger); background: var(--hk-danger-bg); }
+.notice, .demo-notice, .prototype-banner, .error-summary { color: var(--hk-warning); background: var(--hk-warning-bg); border-color: var(--hk-warning); }
+.error-summary { color: var(--hk-danger); background: var(--hk-danger-bg); border-color: var(--hk-danger); }
+.notice.green, .lifecycle-note, .draft-resume { color: var(--hk-text-secondary); background: var(--hk-surface-inset); border-color: var(--hk-separator); }
+.lifecycle-note strong { color: var(--hk-text-primary); }
+.badge, .pill, .offline-badge, .action-kind { background: var(--hk-surface-inset); color: var(--hk-text-secondary); border-color: var(--hk-separator); }
+.badge.succeeded, .green, .info-strip { color: var(--hk-success); background: var(--hk-success-bg); }
+.badge.failed, .badge.timed_out { color: var(--hk-danger); background: var(--hk-danger-bg); }
+.badge.running, .blue { color: var(--hk-info); background: var(--hk-info-bg); }
+.badge.launched, .purple, .action-kind.application { color: var(--hk-purple); background: var(--hk-purple-bg); }
+.badge.skipped, .badge.cancelled, .badge.interrupted { color: var(--hk-text-secondary); background: var(--hk-surface-inset); }
+.orange, .action-kind.script { color: var(--hk-warning); background: var(--hk-warning-bg); }
+.rose { color: var(--hk-danger); background: var(--hk-danger-bg); }
+.task-plan, .command-preview, .log-output, .result-box, .cron-fields > div { color: var(--hk-code-text); background: var(--hk-surface-inset); border-color: var(--hk-separator); }
+.preview-panel { color: var(--hk-text-primary); background: var(--hk-surface); border-color: var(--hk-control-border); }
+.preview-panel h3, .preview-summary { color: var(--hk-text-primary); }
+.preview-cron, .preview-panel .preview-cron, .cron-expression code { color: var(--hk-code-text); }
+.preview-target, .preview-args, .next-runs, .next-runs li, .run-time, .action-path { color: var(--hk-text-secondary); }
+.cron-expression { background: var(--hk-surface-inset); border-color: var(--hk-control-border); }
+.segment, .segmented, .editor-progress { background: var(--hk-surface-inset); border-color: var(--hk-separator); }
+.segment button, .segmented button, .editor-progress button { color: var(--hk-text-secondary); }
+.segment button.active, .segmented button.active, .editor-progress button.active { background: var(--hk-selection); color: var(--hk-selection-text); font-weight: 600; box-shadow: none; }
+.choice-chip, .radio-choice { color: var(--hk-text-secondary); background: var(--hk-field); border-color: var(--hk-control-border); }
+.choice-chip:has(input:checked), .radio-choice:has(input:checked), .kind-card.active { color: var(--hk-selection-text); background: var(--hk-selection); border-color: var(--hk-accent-text); }
+.section-tabs button, .section-tabs .tab-count { color: var(--hk-text-secondary); }
+.section-tabs button.active { color: var(--hk-accent-text); }
+.section-tabs button.active::after { background: var(--hk-accent-text); }
+.section-tabs .tab-count { background: var(--hk-surface-inset); }
+.task-table th, .editor-heading { background: var(--hk-toolbar); color: var(--hk-text-secondary); border-color: var(--hk-separator); font-size: var(--hk-text-caption); }
+.task-table td { background: var(--hk-surface); color: var(--hk-text-primary); border-color: var(--hk-separator); font-size: var(--hk-text-label); }
+.task-table tbody tr:hover, .task-table tbody tr:hover td { background: var(--hk-hover); }
+.table-footnote, .editor-footer, footer, .workspace-footer { color: var(--hk-text-secondary); background: var(--hk-toolbar); border-color: var(--hk-separator); font-size: var(--hk-text-caption); }
+.switch, .toggle { background: var(--hk-text-tertiary); }
+.switch.on, .toggle.on { background: var(--hk-accent); }
+.switch i, .toggle i { background: var(--hk-on-accent); }
+.dialog, dialog, .dropdown, .tab-dropdown { color: var(--hk-text-primary); background: var(--hk-surface-raised); border-color: var(--hk-control-border); border-radius: var(--hk-radius-dialog); box-shadow: var(--hk-shadow); }
+.dialog p, dialog .muted { color: var(--hk-text-secondary); }
+.dialog-candidate { background: var(--hk-surface-inset); color: var(--hk-text-primary); border-color: var(--hk-control-border); }
+.dialog-candidate code { color: var(--hk-text-secondary); }
+dialog::backdrop { background: var(--hk-backdrop); backdrop-filter: none; }
+#toast { color: var(--hk-text-primary); background: var(--hk-surface-raised); border: 1px solid var(--hk-control-border); box-shadow: var(--hk-shadow); }
+.appearance-control { display: inline-flex; align-items: center; gap: 6px; margin-left: 12px; color: var(--hk-text-secondary); font-size: var(--hk-text-caption); }
+.appearance-control select { font-size: var(--hk-text-caption); min-height: 28px; height: 28px; padding: 3px 8px; width: 100px; background: var(--hk-surface); }
+:focus-visible { outline: 3px solid var(--hk-focus); outline-offset: 2px; }
+::selection { color: var(--hk-selection-text); background: var(--hk-selection); }
+@media (prefers-contrast: more) { .button, input, select, textarea, .preview-panel { border-width: 2px; } }
+@media (prefers-reduced-transparency: reduce) { * { backdrop-filter: none !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+.prototype-fab { position: fixed; right: 18px; bottom: 40px; z-index: 99; padding: 10px 15px; background: var(--hk-accent); color: var(--hk-on-accent); text-decoration: none; border-radius: var(--hk-radius-control); font: 12px var(--hk-font-sans); }
+.button:disabled, .button.primary:disabled, .actions button:disabled { background: var(--hk-disabled); color: var(--hk-text-disabled); border-color: var(--hk-separator); }
+.switch, .toggle { background: var(--hk-control-border); }
+.switch.on, .toggle.on { background: var(--hk-accent); }
+
+@media (min-width: 1101px) {
+  .sidebar { width: var(--hk-sidebar-width); }
+}

@@ -40,5 +40,9 @@ jobs:
         run: cargo fmt --manifest-path development/apps/desktop/src-tauri/Cargo.toml -- --check
       - name: Check migration and release tooling
         run: python3 -m unittest discover -s scripts/tests -v
+      - name: Check shared design system and theme contrast
+        run: python3 scripts/check_design_system.py
+      - name: Check appearance controller
+        run: node --test scripts/test_appearance.cjs
       - name: Check version consistency
         run: python3 scripts/check_version.py

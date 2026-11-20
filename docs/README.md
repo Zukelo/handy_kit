@@ -20,3 +20,7 @@
 11. [定时任务调研与需求分析清单](requirements/02-定时任务调研与需求分析清单.md)
 
 12. [定时任务交互原型与设计图](prototypes/tasks/README.md) · [直接打开原型](prototypes/tasks/index.html)
+
+13. [界面设计规范（浅色 / 深色）](design/02-界面设计规范.md) · [组件对照页](design/system/preview.html)
+
+14. [浅深色规范交付与验证](delivery/06-浅深色设计规范交付.md)

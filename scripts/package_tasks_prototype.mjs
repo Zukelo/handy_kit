@@ -19,6 +19,7 @@ writeFileSync(config, JSON.stringify({
   identifier: 'dev.handykit.tasks.prototype',
   build: { frontendDist: join(root, 'docs/prototypes/tasks'), beforeBuildCommand: 'node -e "process.exit(0)"' },
   app: {
+    withGlobalTauri: true,
     windows: [{ label: 'main', title: '小工坊 · 定时任务设计原型', width: 1380, height: 900, minWidth: 1000, minHeight: 700 }],
     security: { csp: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost" },
   },
