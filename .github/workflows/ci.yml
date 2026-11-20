@@ -1,0 +1,41 @@
+name: Checks
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: development/apps/desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Install frontend dependencies
+        working-directory: development/apps/desktop
+        run: npm ci
+      - name: Build frontend
+        working-directory: development/apps/desktop
+        run: npm run build
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path development/apps/desktop/src-tauri/Cargo.toml -- --check
+      - name: Check migration and release tooling
+        run: python3 -m unittest discover -s scripts/tests -v
+      - name: Check version consistency
+        run: python3 scripts/check_version.py
