@@ -48,7 +48,7 @@ h1,h2,h3,p {
   margin:0
 }
 button, a, input {
-   -webkit-tap-highlight-color:transparent 
+   -webkit-tap-highlight-color:transparent
 }
 #app {
   height:100vh;
