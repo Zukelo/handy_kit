@@ -28,7 +28,7 @@ bash ./sync_code-merge-debug.sh
 - clone/fetch/merge/push/HEAD、压缩、复制、SVN commit、清理各阶段的开始、实时 stdout/stderr、退出码、耗时与工作目录。
 - 最终成功/失败数量、SVN 提交数量、总耗时及最终退出码。发生信号或异常退出也尽量写结束记录；SIGKILL/断电无法保证最后一条日志。
 
-不输出原始命令参数、配置全文或 BASH_COMMAND；对已知密码/token 值、HTTP/SSH/SVN URL 中的用户信息及 HTTP 查询串做脱敏。配置加载的输出先临时缓冲，加载完成后再脱敏输出，临时目录仅当前用户可访问并在退出时清理。任意外部程序仍可能输出无法识别的敏感信息，共享日志前请检查。SVN 密码仍按原脚本的 CLI 参数方式使用，日志脱敏不等于凭据加密或系统进程参数隐藏。
+不输出原始命令参数、配置全文或 BASH_COMMAND；对已知密码/token 值、HTTP/SSH/SVN URL 中的用户信息及 HTTP 查询串做脱敏。配置加载的输出先临时缓冲，加载完成后再脱敏输出，临时目录以 mktemp 与 umask 077 创建并在退出时清理（Windows 上的实际访问控制仍取决于系统 ACL）。任意外部程序仍可能输出无法识别的敏感信息，共享日志前请检查。SVN 密码仍按原脚本的 CLI 参数方式使用，日志脱敏不等于凭据加密或系统进程参数隐藏。
 
 ## 同时修正的诊断相关问题
 
@@ -41,7 +41,7 @@ bash ./sync_code-merge-debug.sh
 - 克隆目录限制为脚本目录下的相对路径，清理前核对实际目录，拒绝越界删除。
 - 不自动 svn add、svn update 或处理冲突；这些行为不在原脚本中。SVN 目标应是已有工作副本，待提交 ZIP 应已纳入版本控制，否则会记录具体失败。
 
-`config.sh` 使用原来的变量名：`svn_dir`、`svn_username`、`svn_password`、`svn_timeout`（正整数秒）。`repository.ini` 使用 `[repository...]`、`branch`、`mergebranch`、`url`、`directory`。日志和临时文件使用私有权限，原脚本、配置及源码文件不会被诊断模式重写。
+`config.sh` 使用原来的变量名：`svn_dir`、`svn_username`、`svn_password`、`svn_timeout`（正整数秒）。`repository.ini` 使用 `[repository...]`、`branch`、`mergebranch`、`url`、`directory`。日志和临时文件请求使用私有权限，原脚本、配置及源码文件不会被诊断模式重写。
 
 ## 验证
 
