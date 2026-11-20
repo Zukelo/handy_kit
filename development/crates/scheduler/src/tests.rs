@@ -428,3 +428,53 @@ fn git_bash_launcher_runs_headless_and_preserves_failure_output() {
         Some(23)
     );
 }
+
+#[test]
+#[cfg(windows)]
+fn git_bash_d_drive_script_path() {
+    let root = std::env::var_os("HANDYKIT_TEST_GIT_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(r"C:\Program Files\Git"));
+    if !root.join("usr/bin/bash.exe").is_file() || !Path::new(r"D:\").is_dir() {
+        assert!(
+            std::env::var_os("GITHUB_ACTIONS").is_none(),
+            "CI requires Git and D drive"
+        );
+        return;
+    }
+    let f = Fixture::new();
+    let dir = PathBuf::from(r"D:\").join(format!("handykit-path-test-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let script = dir.join("sync code-merge.sh");
+    std::fs::write(
+        &script,
+        "printf 'd-drive-ok'; printf 'retained-error' >&2; exit 17\n",
+    )
+    .unwrap();
+    let task = Task {
+        id: String::new(),
+        revision: 0,
+        name: "D drive script".into(),
+        description: String::new(),
+        enabled: false,
+        cron: "* * * * *".into(),
+        zone: "UTC".into(),
+        action: Action {
+            kind: "script".into(),
+            target: script.to_string_lossy().into(),
+            interpreter: root.join("git-bash.exe").to_string_lossy().into(),
+            args: vec![],
+            env: vec![],
+            cwd: String::new(),
+            instance: "reuse".into(),
+        },
+        timeout: Some(5),
+    };
+    let task = f.service.save(task).unwrap();
+    let run = done(&f.service, &f.service.run_now(&task.id).unwrap());
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(run.exit_code, Some(17), "{} / {}", run.message, run.stderr);
+    assert_eq!(run.stdout, "d-drive-ok");
+    assert_eq!(run.stderr, "retained-error");
+    assert!(run.message.contains("/d/"), "{}", run.message);
+}

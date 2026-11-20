@@ -28,3 +28,5 @@
 15. [定时任务功能开发交付](delivery/07-定时任务功能开发交付.md) · [运行数据库模型](database/02-定时任务运行模型.md)
 
 16. [Windows 控制台与 sh 脚本修复（0.1.1）](delivery/08-Windows控制台与sh脚本修复.md)
+
+17. [Windows 脚本路径修复（0.1.2）](delivery/09-Windows脚本路径修复.md)

@@ -173,12 +173,47 @@ fn windows_shell(selected: &std::path::Path) -> Result<std::path::PathBuf, Strin
 }
 #[cfg(windows)]
 fn shell_path(path: &str) -> String {
-    // MSYS shells accept forward-slash drive/UNC paths; do not rewrite user argv values.
+    // Fallback for MSYS drive mounts; do not rewrite user argv values.
     let p = path
         .strip_prefix(r"\\?\UNC\")
         .map(|p| format!(r"\\{p}"))
         .unwrap_or_else(|| path.strip_prefix(r"\\?\").unwrap_or(path).to_owned());
-    p.replace('\\', "/")
+    let p = p.replace('\\', "/");
+    let bytes = p.as_bytes();
+    if bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'/' {
+        format!("/{}{}", (bytes[0] as char).to_ascii_lowercase(), &p[2..])
+    } else {
+        p
+    }
+}
+#[cfg(windows)]
+fn interpreter_script_path(interpreter: &std::path::Path, target: &str) -> Result<String, String> {
+    use std::os::windows::process::CommandExt;
+    let cygpath = interpreter
+        .parent()
+        .ok_or("解释器目录无效")?
+        .join("cygpath.exe");
+    if !cygpath.is_file() {
+        return Ok(shell_path(target));
+    }
+    let output = Command::new(cygpath)
+        .args(["-u", "--", target])
+        .stdin(Stdio::null())
+        .creation_flags(0x08000000)
+        .output()
+        .map_err(|e| format!("脚本路径转换失败：{e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "cygpath 无法转换脚本路径：{}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    let path = String::from_utf8(output.stdout).map_err(|_| "cygpath 输出不是 UTF-8")?;
+    let path = path.trim_end_matches(['\r', '\n']);
+    if path.is_empty() || !path.starts_with('/') {
+        return Err(format!("cygpath 返回无效脚本路径：{path}"));
+    }
+    Ok(path.into())
 }
 fn command(task: &Task) -> Result<Command, String> {
     let a = &task.action;
@@ -205,7 +240,8 @@ fn command(task: &Task) -> Result<Command, String> {
         let c = {
             let interpreter = windows_shell(std::path::Path::new(&a.interpreter))?;
             let mut c = Command::new(&interpreter);
-            c.arg(shell_path(&a.target));
+            c.arg("--")
+                .arg(interpreter_script_path(&interpreter, &a.target)?);
             let parent = interpreter.parent().ok_or("解释器目录无效")?;
             let mut paths = vec![parent.to_path_buf()];
             if parent
@@ -578,8 +614,9 @@ pub fn execute(task: &Task, ctrl: Arc<Control>) -> Outcome {
     #[cfg(windows)]
     if task.action.kind == "script" {
         result.message.push_str(&format!(
-            "；实际解释器：{}",
-            cmd.get_program().to_string_lossy()
+            "；实际解释器：{}；脚本路径：{}",
+            cmd.get_program().to_string_lossy(),
+            cmd.get_args().nth(1).unwrap_or_default().to_string_lossy()
         ));
     }
     result
@@ -590,11 +627,15 @@ mod windows_tests {
     use super::*;
     #[test]
     fn msys_paths_and_terminal_validation() {
-        assert_eq!(shell_path(r"C:\脚本 目录\test.sh"), "C:/脚本 目录/test.sh");
-        assert_eq!(shell_path(r"\\?\C:\scripts\test.sh"), "C:/scripts/test.sh");
+        assert_eq!(shell_path(r"C:\脚本 目录\test.sh"), "/c/脚本 目录/test.sh");
+        assert_eq!(shell_path(r"\\?\C:\scripts\test.sh"), "/c/scripts/test.sh");
         assert_eq!(
             shell_path(r"\\?\UNC\server\share\test.sh"),
             "//server/share/test.sh"
+        );
+        assert_eq!(
+            shell_path(r"D:\bsoft\project\01\sync_code\sync_code-merge.sh"),
+            "/d/bsoft/project/01/sync_code/sync_code-merge.sh"
         );
         for terminal in ["mintty.exe", "cmd.exe", "git-cmd.exe", "pwsh.exe"] {
             assert!(windows_shell(&std::path::Path::new(r"C:\tools").join(terminal)).is_err());
