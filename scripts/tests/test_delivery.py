@@ -56,7 +56,7 @@ class DeliveryTests(unittest.TestCase):
             migration.migrate(db)
             with sqlite3.connect(db) as connection:
                 self.assertEqual(connection.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
-                self.assertEqual(connection.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0], 1)
+                self.assertEqual(connection.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0], len(list((migration.ROOT / 'database/migrations').glob('*.sql'))))
 
     def test_changed_migration_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

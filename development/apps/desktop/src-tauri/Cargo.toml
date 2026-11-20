@@ -10,3 +10,8 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
+handykit-scheduler = { path = "../../../crates/scheduler" }
+serde = { version = "1", features = ["derive"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+chrono = "0.4"

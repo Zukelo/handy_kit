@@ -1,3 +1,4 @@
+import { TasksView } from '../tasks/view.ts';
 import { categories, findTool, isTabId, isToolId, matchesSearch, type Category, type TabId } from './tools.ts';
 import { closeAllTabs, closeOtherTabs, closeTab, loadWorkspace, openTab, saveWorkspace, toggleFavorite, type StoragePort, type WorkspaceState } from './workspace.ts';
 import { requiredElement, toolIcon } from '../components/html.ts';
@@ -7,6 +8,7 @@ import { renderToolPlaceholder } from '../views/tool-placeholder.ts';
 
 export class Application {
   private state: WorkspaceState;
+  private tasksView: TasksView | undefined;
   private readonly root: HTMLElement;
   private readonly storage: StoragePort;
   private storageAvailable: boolean;
@@ -46,6 +48,13 @@ export class Application {
     this.element<HTMLElement>('#storage-status').textContent = this.storageAvailable ? '工作区自动保存到本机' : '当前会话模式 · 工作区无法保存';
   }
   private update(next: WorkspaceState, focusSelector?: string): void {
+    if (this.state.tabs.includes('tasks') && !next.tabs.includes('tasks')) {
+      if (this.tasksView?.dirty()) {
+        void this.tasksView.canClose().then(allowed => { if (allowed) this.update(next, focusSelector); }).catch(error => this.notify(String(error)));
+        return;
+      }
+      this.tasksView?.dispose(); this.tasksView = undefined;
+    }
     const content = this.element<HTMLElement>('#content');
     this.scrollPositions.set(this.state.active, content.scrollTop);
     this.state = next;
@@ -67,9 +76,10 @@ export class Application {
     panel.setAttribute('role', 'tabpanel');
     panel.setAttribute('aria-labelledby', `tab-${id}`);
     panel.tabIndex = 0;
-    if (id !== 'home') panel.innerHTML = renderToolPlaceholder(findTool(id)!);
+    if (id !== 'home' && id !== 'tasks') panel.innerHTML = renderToolPlaceholder(findTool(id)!);
     this.element<HTMLElement>('#content').append(panel);
     this.panels.set(id, panel);
+    if (id === 'tasks') this.tasksView = new TasksView(panel);
   }
   private render(): void {
     this.panels.get('home')!.innerHTML = renderHome(this.state);

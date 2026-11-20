@@ -9,7 +9,7 @@
 - `database/`：SQL 迁移、测试种子、开发数据和备份；真实数据库不提交。
 - `scripts/`：初始化与校验脚本。
 
-从 [文档入口](docs/README.md) 开始。当前已实现桌面框架与首页：分类导航、多标签工作区、收藏、常用工具、最近打开和工作区恢复。五个具体工具暂为占位页。
+从 [文档入口](docs/README.md) 开始。当前已实现桌面框架与首页：分类导航、多标签工作区、收藏、常用工具、最近打开和工作区恢复。定时任务已接入 Rust 后台调度、真实脚本/程序/app 执行、SQLite 持久化和执行记录；其他四个工具仍为占位页。详见 [定时任务开发交付](docs/delivery/07-定时任务功能开发交付.md)。
 
 直接打开 [GUI 交互原型](docs/prototypes/index.html) 可查看首页、分类菜单与多标签工作区，无需安装依赖。
 
@@ -33,7 +33,7 @@ npm run build:offline
 
 上述两个命令用于 Windows 的两种安装方式，应在 Windows 构建。macOS/Linux 使用 `npm run tauri:build`，离线交付还须执行平台验收清单。
 
-数据库开发初始化：`python3 scripts/init_database.py`。生产运行时使用系统应用数据目录，不能写入安装目录或仓库。
+数据库开发初始化：`python3 scripts/init_database.py`。生产运行时使用系统应用数据目录，不能写入安装目录或仓库。定时任务需要 `tauri:dev` 或本机 App；纯网页模式不执行程序。
 
 ## 分支与发布
 

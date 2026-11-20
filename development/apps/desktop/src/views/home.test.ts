@@ -16,8 +16,8 @@ test('home reflects favorites, recent tools and empty states', () => {
   assert.match(empty, /还没有收藏的工具/);
   assert.doesNotMatch(empty, /data-action="clear-recent"/);
 });
-test('all registered tools have navigation-only placeholders with no business forms', () => {
-  for (const tool of tools) {
+test('unimplemented tools retain navigation-only placeholders', () => {
+  for (const tool of tools.filter(tool => tool.id !== 'tasks')) {
     const html = renderToolPlaceholder(tool);
     assert.ok(html.includes(tool.name));
     assert.match(html, /data-open="home"/);

@@ -18,3 +18,6 @@ function applyNativeAppearance(): void {
 }
 document.addEventListener('handykit:appearance', applyNativeAppearance);
 applyNativeAppearance();
+
+import { setupTaskLifecycle } from './tasks/lifecycle.ts';
+void setupTaskLifecycle().catch(error => console.warn('退出监听不可用', error));
