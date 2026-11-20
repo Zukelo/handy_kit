@@ -4,6 +4,8 @@
 
 仓库：https://github.com/Zukelo/handy_kit
 
+本机 origin 拉取地址使用 HTTPS，推送地址使用现有 SSH 身份；首次上传已验证 SSH 写入权限。
+
 - `main`：稳定基线与版本发布来源，GitHub 默认分支。
 - `develop`：日常开发主分支，本机默认停留此分支。
 - 可选 `feature/功能名`、`fix/问题名`：从 develop 创建，完成后合回 develop。
