@@ -60,5 +60,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@stable
+      - name: Locate Git for Windows for shell regression
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $gitRoot = Split-Path (Split-Path (Get-Command git.exe).Source)
+          if (!(Test-Path "$gitRoot\usr\bin\bash.exe")) { throw "Git Bash interpreter missing" }
+          "HANDYKIT_TEST_GIT_ROOT=$gitRoot" >> $env:GITHUB_ENV
       - name: Test platform executor and scheduler
         run: cargo test --manifest-path development/crates/scheduler/Cargo.toml --locked

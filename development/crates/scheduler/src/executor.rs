@@ -47,6 +47,8 @@ pub fn validate(task: &Task) -> Result<(), String> {
             return Err("请选择解释器绝对路径".into());
         }
         executable_file(p, true)?;
+        #[cfg(windows)]
+        executable_file(&windows_shell(p)?, true)?;
     }
     if a.kind != "application"
         && !a.cwd.is_empty()
@@ -123,7 +125,62 @@ fn executable_file(path: &std::path::Path, execute: bool) -> Result<(), String> 
     }
     Ok(())
 }
-fn command(task: &Task) -> Command {
+#[cfg(windows)]
+fn windows_shell(selected: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    let name = selected
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_ascii_lowercase();
+    if name == "git-bash.exe" {
+        let root = selected.parent().ok_or("Git Bash 安装目录无效")?;
+        for relative in ["usr/bin/bash.exe", "bin/bash.exe"] {
+            let candidate = root.join(relative);
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+        return Err("git-bash.exe 是终端启动器；未找到相邻的 usr\\bin\\bash.exe 或 bin\\bash.exe，请选择真实的 bash.exe/sh.exe 解释器".into());
+    }
+    if [
+        "mintty.exe",
+        "git-cmd.exe",
+        "cmd.exe",
+        "powershell.exe",
+        "pwsh.exe",
+        "wsl.exe",
+    ]
+    .contains(&name.as_str())
+    {
+        return Err("脚本解释器应选择 bash.exe/sh.exe 等兼容 shell，而非终端启动器或 cmd/PowerShell/WSL；其他程序请使用「运行程序」".into());
+    }
+    if ["bash.exe", "sh.exe"].contains(&name.as_str()) {
+        if let Some(bin) = selected.parent() {
+            if bin
+                .file_name()
+                .is_some_and(|n| n.eq_ignore_ascii_case("bin"))
+            {
+                if let Some(root) = bin.parent() {
+                    let candidate = root.join("usr").join("bin").join(&name);
+                    if candidate.is_file() {
+                        return Ok(candidate);
+                    }
+                }
+            }
+        }
+    }
+    Ok(selected.into())
+}
+#[cfg(windows)]
+fn shell_path(path: &str) -> String {
+    // MSYS shells accept forward-slash drive/UNC paths; do not rewrite user argv values.
+    let p = path
+        .strip_prefix(r"\\?\UNC\")
+        .map(|p| format!(r"\\{p}"))
+        .unwrap_or_else(|| path.strip_prefix(r"\\?\").unwrap_or(path).to_owned());
+    p.replace('\\', "/")
+}
+fn command(task: &Task) -> Result<Command, String> {
     let a = &task.action;
     #[cfg(target_os = "macos")]
     if a.kind == "application" {
@@ -135,11 +192,51 @@ fn command(task: &Task) -> Command {
         if !a.args.is_empty() {
             c.arg("--args").args(a.args.iter().map(|a| &a.value));
         }
-        return c;
+        return Ok(c);
     }
     let mut c = if a.kind == "script" {
-        let mut c = Command::new(&a.interpreter);
-        c.arg(&a.target);
+        #[cfg(not(windows))]
+        let c = {
+            let mut c = Command::new(&a.interpreter);
+            c.arg(&a.target);
+            c
+        };
+        #[cfg(windows)]
+        let c = {
+            let interpreter = windows_shell(std::path::Path::new(&a.interpreter))?;
+            let mut c = Command::new(&interpreter);
+            c.arg(shell_path(&a.target));
+            let parent = interpreter.parent().ok_or("解释器目录无效")?;
+            let mut paths = vec![parent.to_path_buf()];
+            if parent
+                .file_name()
+                .is_some_and(|n| n.eq_ignore_ascii_case("bin"))
+            {
+                if let Some(root) = parent.parent() {
+                    let root = if root
+                        .file_name()
+                        .is_some_and(|n| n.eq_ignore_ascii_case("usr"))
+                    {
+                        root.parent().unwrap_or(root)
+                    } else {
+                        root
+                    };
+                    for path in [root.join("usr/bin"), root.join("bin")] {
+                        if path.is_dir() && !paths.contains(&path) {
+                            paths.push(path);
+                        }
+                    }
+                }
+            }
+            if let Some(path) = std::env::var_os("PATH") {
+                paths.extend(std::env::split_paths(&path));
+            }
+            c.env(
+                "PATH",
+                std::env::join_paths(paths).map_err(|e| format!("解释器 PATH 无效：{e}"))?,
+            );
+            c
+        };
         c
     } else {
         Command::new(&a.target)
@@ -159,7 +256,7 @@ fn command(task: &Task) -> Command {
             c.env(&e.key, &e.value);
         }
     }
-    c
+    Ok(c)
 }
 trait Pipe: Read + Send {
     fn ready_read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize>;
@@ -347,7 +444,10 @@ pub fn execute(task: &Task, ctrl: Arc<Control>) -> Outcome {
             message: "启动前已取消".into(),
         };
     }
-    let mut cmd = command(task);
+    let mut cmd = match command(task) {
+        Ok(c) => c,
+        Err(e) => return failure(e),
+    };
     cmd.stdin(Stdio::null());
     if task.action.kind == "application" {
         cmd.stdout(Stdio::null()).stderr(Stdio::null());
@@ -415,7 +515,8 @@ pub fn execute(task: &Task, ctrl: Arc<Control>) -> Outcome {
     let stdout = drain(Box::new(child.stdout.take().unwrap()), ctrl.clone(), false);
     let stderr = drain(Box::new(child.stderr.take().unwrap()), ctrl.clone(), true);
     let start = Instant::now();
-    let result = loop {
+    #[allow(unused_mut)]
+    let mut result = loop {
         if ctrl.cancel.load(Ordering::SeqCst)
             || task
                 .timeout
@@ -474,5 +575,29 @@ pub fn execute(task: &Task, ctrl: Arc<Control>) -> Outcome {
     ctrl.finished.store(true, Ordering::SeqCst);
     let _ = stdout.join();
     let _ = stderr.join();
+    #[cfg(windows)]
+    if task.action.kind == "script" {
+        result.message.push_str(&format!(
+            "；实际解释器：{}",
+            cmd.get_program().to_string_lossy()
+        ));
+    }
     result
+}
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::*;
+    #[test]
+    fn msys_paths_and_terminal_validation() {
+        assert_eq!(shell_path(r"C:\脚本 目录\test.sh"), "C:/脚本 目录/test.sh");
+        assert_eq!(shell_path(r"\\?\C:\scripts\test.sh"), "C:/scripts/test.sh");
+        assert_eq!(
+            shell_path(r"\\?\UNC\server\share\test.sh"),
+            "//server/share/test.sh"
+        );
+        for terminal in ["mintty.exe", "cmd.exe", "git-cmd.exe", "pwsh.exe"] {
+            assert!(windows_shell(&std::path::Path::new(r"C:\tools").join(terminal)).is_err());
+        }
+    }
 }

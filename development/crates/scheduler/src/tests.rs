@@ -354,3 +354,77 @@ fn windows_native_exe_and_job_timeout() {
     assert_eq!(r.status, "timed_out");
     assert_eq!(f.service.running_count(), 0);
 }
+
+#[test]
+#[cfg(windows)]
+fn git_bash_launcher_runs_headless_and_preserves_failure_output() {
+    let root = std::env::var_os("HANDYKIT_TEST_GIT_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(r"C:\Program Files\Git"));
+    if !root.join("git-bash.exe").is_file() {
+        assert!(
+            std::env::var_os("GITHUB_ACTIONS").is_none(),
+            "CI must provide Git for Windows"
+        );
+        eprintln!("Git integration requires Git for Windows; skipped on this local machine");
+        return;
+    }
+    let f = Fixture::new();
+    let dir = f.dir.join("脚本 含空格");
+    std::fs::create_dir_all(&dir).unwrap();
+    let script = dir.join("failure test.sh");
+    std::fs::write(&script,"printf '<%s>\\n' \"$@\"\nprintf 'stderr-visible' >&2\nprintf 'tool='\nbasename /a/tool\nexit 23\n").unwrap();
+    let task = Task {
+        id: String::new(),
+        revision: 0,
+        name: "Git Bash failure".into(),
+        description: String::new(),
+        enabled: false,
+        cron: "* * * * *".into(),
+        zone: "UTC".into(),
+        action: Action {
+            kind: "script".into(),
+            target: script.to_string_lossy().into(),
+            interpreter: root.join("git-bash.exe").to_string_lossy().into(),
+            args: vec![
+                Argument {
+                    value: "中文 空格".into(),
+                    secret: false,
+                },
+                Argument {
+                    value: String::new(),
+                    secret: false,
+                },
+                Argument {
+                    value: "\"quoted\" $HOME".into(),
+                    secret: false,
+                },
+            ],
+            env: vec![],
+            cwd: String::new(),
+            instance: "reuse".into(),
+        },
+        timeout: Some(5),
+    };
+    let saved = f.service.save(task.clone()).unwrap();
+    let run = done(&f.service, &f.service.run_now(&saved.id).unwrap());
+    assert_eq!(run.status, "failed", "{} / {}", run.message, run.stderr);
+    assert_eq!(run.exit_code, Some(23));
+    assert!(
+        run.stdout.contains("<中文 空格>\n<>\n<\"quoted\" $HOME>\n"),
+        "{:?}",
+        run.stdout
+    );
+    assert!(run.stdout.contains("tool=tool"));
+    assert_eq!(run.stderr, "stderr-visible");
+    let read_again = f.service.run_detail(&run.id).unwrap();
+    assert_eq!(read_again.stderr, "stderr-visible");
+    assert_eq!(read_again.exit_code, Some(23));
+    let mut task = task;
+    task.action.interpreter = root.join("bin/bash.exe").to_string_lossy().into();
+    let saved = f.service.save(task).unwrap();
+    assert_eq!(
+        done(&f.service, &f.service.run_now(&saved.id).unwrap()).exit_code,
+        Some(23)
+    );
+}
