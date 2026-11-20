@@ -25,8 +25,9 @@ const panels = new Map();
 let demoTasks = [{ id: 1, name: '每日开发回顾', cron: '0 18 * * 1-5', enabled: true }, { id: 2, name: '站起来活动一下', cron: '0 * * * *', enabled: false }];
 const icon = (tool, small = false) => `<span class="tool-icon ${tool.color} ${small ? 'small' : ''}" aria-hidden="true">${tool.symbol}</span>`;
 const persist = () => { try { localStorage.setItem('handykit.workspace.v1', JSON.stringify({ tabs: tabs.filter(id => id !== 'home'), active, favorites, recent })); } catch { /* private mode */ } };
+const brandUrl = new URL('./assets/brand.svg', document.currentScript?.src ?? location.href).href;
 $('#app').innerHTML = `
-  <header class="titlebar"><div class="brand"><span class="brand-mark" aria-hidden="true">h<span>k</span></span><strong>小工坊 <span>HandyKit</span></strong><span class="version">PROTOTYPE / 0.2</span></div><div class="title-right"><span class="local-dot"></span> 本地工作空间 <span class="divider">/</span><span>开发者的随身工具箱</span></div></header>
+  <header class="titlebar"><div class="brand"><img class="brand-logo" src="${brandUrl}" alt="" aria-hidden="true"><strong>小工坊 <span>HandyKit</span></strong><span class="version">PROTOTYPE / 0.2</span></div><div class="title-right"><span class="local-dot"></span> 本地工作空间 <span class="divider">/</span><span>开发者的随身工具箱</span></div></header>
   <div class="workbench"><aside class="sidebar"><div class="sidebar-top"><span class="eyebrow">WORKSPACE</span><button class="icon-button" id="collapse-nav" aria-label="收起导航" title="收起导航">◂</button></div>
   <button class="nav-home" data-open="home"><span aria-hidden="true">⌂</span><span>工作台首页</span><span class="home-key">H</span></button>
   <div class="nav-divider"></div><label class="search-box"><span aria-hidden="true">⌕</span><input id="tool-search" type="search" placeholder="查找工具…" aria-label="查找工具"><kbd>/</kbd></label>

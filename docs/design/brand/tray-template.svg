@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>小工坊菜单栏单色图标</title>
+  <path d="M9 25L32 8L55 25" stroke="#000" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="21" y="31" width="22" height="5" rx="1.5" fill="#000"/>
+  <rect x="29.5" y="34" width="5" height="17" rx="1" fill="#000"/>
+  <rect x="16" y="49" width="32" height="5.5" rx="1.5" fill="#000"/>
+</svg>

@@ -1349,3 +1349,5 @@ dialog input {
 .home-panel:focus-visible, .tool-panel:focus-visible { outline-offset: -4px; }
 .home-key { font-size: 9px; }
 @media (max-width: 850px) { .placeholder-actions { flex-wrap: wrap; justify-content: center; } }
+
+.brand-logo { width: 38px; height: 38px; display: block; flex-shrink: 0; }

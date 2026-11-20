@@ -52,3 +52,5 @@ npm run package:local
 ```
 
 macOS Apple Silicon 的开发 App 输出到 `builds/darwin-arm64/HandyKit.app`，可以直接双击运行。详见 [框架与首页开发交付](docs/delivery/04-框架与首页开发交付.md)。
+
+关闭主窗口后，小工坊会驻留在 macOS 菜单栏或 Windows/Linux 托盘。可选择「显示主窗口」恢复，使用「彻底退出小工坊」结束程序；macOS Cmd+Q 对应隐藏到菜单栏。图标采用「屋檐＋工字工作台」设计，详见 [菜单栏托盘与品牌图标](docs/delivery/05-菜单栏托盘与品牌图标.md)。

@@ -1,10 +1,11 @@
 import { categories, tools } from '../app/tools.ts';
 import { toolIcon } from './html.ts';
+import brandIcon from '../assets/brand.svg';
 
 export function renderShell(version: string): string {
   return `
     <header class="titlebar">
-      <div class="brand"><span class="brand-mark" aria-hidden="true">h<span>k</span></span><strong>小工坊 <span>HandyKit</span></strong><span class="version">DEV / ${version}</span></div>
+      <div class="brand"><img class="brand-logo" src="${brandIcon}" alt="" aria-hidden="true"><strong>小工坊 <span>HandyKit</span></strong><span class="version">DEV / ${version}</span></div>
       <div class="title-right"><span class="local-dot"></span> 本地工作空间 <span class="divider">/</span><span>开发者的随身工具箱</span></div>
     </header>
     <div class="workbench">
