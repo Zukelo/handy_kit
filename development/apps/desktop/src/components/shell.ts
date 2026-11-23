@@ -5,7 +5,7 @@ import brandIcon from '../assets/brand.svg';
 export function renderShell(version: string): string {
   return `
     <header class="titlebar">
-      <div class="brand"><img class="brand-logo" src="${brandIcon}" alt="" aria-hidden="true"><strong>小工坊 <span>HandyKit</span></strong><span class="version">DEV / ${version}</span></div>
+      <div class="brand"><img class="brand-logo" src="${brandIcon}" alt="" aria-hidden="true"><strong>小工坊 <span>HandyKit</span></strong><span class="version">v${version}</span></div>
       <div class="title-right"><span class="local-dot"></span> 本地工作空间 <span class="divider">/</span><span>开发者的随身工具箱</span><label class="appearance-control"><span>外观</span><select data-appearance aria-label="外观主题"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label></div>
     </header>
     <div class="workbench">
