@@ -20,12 +20,31 @@ pub struct Control {
     pub finished: AtomicBool,
     pub output: Mutex<Output>,
 }
+pub(crate) use handykit_process::decode_output;
+use handykit_process::{configure, ProcessTree};
 pub struct Outcome {
     pub status: String,
     pub code: Option<i32>,
     pub message: String,
 }
-pub fn validate(task: &Task) -> Result<(), String> {
+pub fn validate(task: &Task, plugins: Option<&dyn crate::PluginExecutor>) -> Result<(), String> {
+    if task.action.kind == "plugin" {
+        let a = &task.action;
+        if !a.args.is_empty()
+            || !a.env.is_empty()
+            || !a.cwd.is_empty()
+            || !a.interpreter.is_empty()
+            || a.instance != "reuse"
+        {
+            return Err("原生插件任务不接受脚本参数、环境覆盖或工作目录；请在插件中配置".into());
+        }
+        if task.timeout.is_some_and(|n| n == 0 || n > 604800) {
+            return Err("超时应为 1–604800 秒".into());
+        }
+        return plugins
+            .ok_or("此构建未接入插件宿主")?
+            .validate(&a.target, a.plugin_revision.ok_or("插件任务缺少配置版本")?);
+    }
     if !["script", "executable", "application"].contains(&task.action.kind.as_str()) {
         return Err("未知动作类型".into());
     }
@@ -47,8 +66,6 @@ pub fn validate(task: &Task) -> Result<(), String> {
             return Err("请选择解释器绝对路径".into());
         }
         executable_file(p, true)?;
-        #[cfg(windows)]
-        executable_file(&windows_shell(p)?, true)?;
     }
     if a.kind != "application"
         && !a.cwd.is_empty()
@@ -119,159 +136,42 @@ fn executable_file(path: &std::path::Path, execute: bool) -> Result<(), String> 
                 .extension()
                 .is_some_and(|x| x.eq_ignore_ascii_case("exe"))
             {
-                return Err("Windows 首版仅直接执行 exe；bat/cmd/ps1 需要专用适配".into());
+                return Err("Windows 直接执行程序请选择 exe；脚本请选择对应解释器".into());
             }
         }
     }
     Ok(())
 }
 #[cfg(windows)]
-const WINDOWS_BASH_RUNNER: &str = r#"
-_hk_directory=$1
-_hk_script=$2
-shift 2
-if ! builtin cd -- "$_hk_directory"; then
-  builtin printf '[HandyKit预检失败] Bash 无法进入工作目录：%s\n' "$_hk_directory" >&2
-  builtin pwd -P >&2
-  exit 125
-fi
-if ! { exec 3< "$_hk_script"; }; then
-  builtin printf '[HandyKit预检失败] Bash 无法打开脚本：%s\n' "$_hk_script" >&2
-  builtin printf '[HandyKit] Bash 实际目录：' >&2
-  builtin pwd -P >&2
-  exit 127
-fi
-exec 3<&-
-exec "$BASH" --noprofile --norc -- "$_hk_script" "$@"
-"#;
-#[cfg(windows)]
-fn is_bash(interpreter: &std::path::Path) -> bool {
-    interpreter
-        .file_name()
-        .is_some_and(|n| n.eq_ignore_ascii_case("bash.exe"))
-}
-#[cfg(windows)]
-fn use_bash_runner(task: &Task, interpreter: &std::path::Path) -> bool {
-    is_bash(interpreter)
-        && !task
-            .action
-            .env
-            .iter()
-            .any(|e| e.key.eq_ignore_ascii_case("BASH_ENV") || e.key.eq_ignore_ascii_case("ENV"))
-}
-#[cfg(windows)]
-fn windows_shell(selected: &std::path::Path) -> Result<std::path::PathBuf, String> {
-    let name = selected
-        .file_name()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .to_ascii_lowercase();
-    if name == "git-bash.exe" {
-        let root = selected.parent().ok_or("Git Bash 安装目录无效")?;
-        for relative in ["usr/bin/bash.exe", "bin/bash.exe"] {
-            let candidate: std::path::PathBuf = root.join(relative).components().collect();
-            if candidate.is_file() {
-                return Ok(candidate);
-            }
-        }
-        return Err("git-bash.exe 是终端启动器；未找到相邻的 usr\\bin\\bash.exe 或 bin\\bash.exe，请选择真实的 bash.exe/sh.exe 解释器".into());
-    }
-    if [
-        "mintty.exe",
-        "git-cmd.exe",
-        "cmd.exe",
-        "powershell.exe",
-        "pwsh.exe",
-        "wsl.exe",
-    ]
-    .contains(&name.as_str())
-    {
-        return Err("脚本解释器应选择 bash.exe/sh.exe 等兼容 shell，而非终端启动器或 cmd/PowerShell/WSL；其他程序请使用「运行程序」".into());
-    }
-    if ["bash.exe", "sh.exe"].contains(&name.as_str()) {
-        if let Some(bin) = selected.parent() {
-            if bin
-                .file_name()
-                .is_some_and(|n| n.eq_ignore_ascii_case("bin"))
-            {
-                if let Some(root) = bin.parent() {
-                    let candidate = root.join("usr").join("bin").join(&name);
-                    if candidate.is_file() {
-                        return Ok(candidate);
-                    }
-                }
-            }
-        }
-    }
-    Ok(selected.components().collect())
-}
-#[cfg(windows)]
-fn shell_path(path: &str) -> String {
-    // Fallback for MSYS drive mounts; do not rewrite user argv values.
-    let p = path
+fn script_argument(task: &Task) -> String {
+    // Preserve the user's drive/UNC namespace. Never canonicalize to the backing
+    // store or infer an MSYS mount (/c, /d), and never launch an auxiliary cygpath.
+    // Forward slashes are accepted by Git Bash without exposing backing paths.
+    let path = &task.action.target;
+    let logical = path
         .strip_prefix(r"\\?\UNC\")
         .map(|p| format!(r"\\{p}"))
         .unwrap_or_else(|| path.strip_prefix(r"\\?\").unwrap_or(path).to_owned());
-    let p = p.replace('\\', "/");
-    let bytes = p.as_bytes();
-    if bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'/' {
-        format!("/{}{}", (bytes[0] as char).to_ascii_lowercase(), &p[2..])
-    } else {
-        p
-    }
+    logical.replace('\\', "/")
 }
 #[cfg(windows)]
-fn interpreter_script_path(interpreter: &std::path::Path, target: &str) -> Result<String, String> {
-    use std::os::windows::process::CommandExt;
-    let cygpath = interpreter
-        .parent()
-        .ok_or("解释器目录无效")?
-        .join("cygpath.exe");
-    if !cygpath.is_file() {
-        return Ok(shell_path(target));
-    }
-    let output = Command::new(cygpath)
-        .args(["-u", "--", target])
-        .stdin(Stdio::null())
-        .creation_flags(0x08000000)
-        .output()
-        .map_err(|e| format!("脚本路径转换失败：{e}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "cygpath 无法转换脚本路径：{}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-    let path = String::from_utf8(output.stdout).map_err(|_| "cygpath 输出不是 UTF-8")?;
-    let path = path.trim_end_matches(['\r', '\n']);
-    if path.is_empty() || !path.starts_with('/') {
-        return Err(format!("cygpath 返回无效脚本路径：{path}"));
-    }
-    Ok(path.into())
-}
-#[cfg(windows)]
-fn script_argument(task: &Task, interpreter: &std::path::Path) -> Result<String, String> {
-    let target = std::path::Path::new(&task.action.target);
-    // Native validation distinguishes a Windows read failure from an MSYS path failure.
-    std::fs::File::open(target)
-        .map_err(|e| format!("Windows 无法读取脚本 {}：{e}", target.display()))?;
-    let parent = target.parent().ok_or("脚本目录无效")?;
-    let uses_parent = task.action.cwd.is_empty()
-        || std::fs::canonicalize(&task.action.cwd)
-            .ok()
-            .zip(std::fs::canonicalize(parent).ok())
-            .is_some_and(|(a, b)| a == b);
-    if uses_parent {
-        // Windows creates the process in this directory. A relative filename avoids drive mounts.
-        let name = target
+fn git_bash_launcher(task: &Task) -> bool {
+    task.action.kind == "script"
+        && std::path::Path::new(&task.action.interpreter)
             .file_name()
-            .ok_or("脚本文件名无效")?
-            .to_str()
-            .ok_or("脚本文件名无法解码")?;
-        return Ok(format!("./{name}"));
-    }
-    interpreter_script_path(interpreter, &task.action.target)
+            .is_some_and(|name| name.eq_ignore_ascii_case("git-bash.exe"))
 }
+// The configured launcher initializes MSYSTEM/PATH/HOME and synchronously runs
+// its own Bash, with inherited output handles. User data remains separate argv;
+// no -c string, sibling-interpreter fallback or host-side path probing is used.
+#[cfg(windows)]
+const GIT_BASH_HEADLESS_ARGS: [&str; 5] = [
+    "--no-needs-console",
+    "--hide",
+    "--no-cd",
+    "--no-append-quote",
+    r"--command=usr\bin\bash.exe --login",
+];
 fn command(task: &Task) -> Result<Command, String> {
     let a = &task.action;
     #[cfg(target_os = "macos")]
@@ -295,62 +195,11 @@ fn command(task: &Task) -> Result<Command, String> {
         };
         #[cfg(windows)]
         let c = {
-            let interpreter = windows_shell(std::path::Path::new(&a.interpreter))?;
-            let mut c = Command::new(&interpreter);
-            let script = script_argument(task, &interpreter)?;
-            if use_bash_runner(task, &interpreter) {
-                let cwd = if a.cwd.is_empty() {
-                    std::path::Path::new(&a.target)
-                        .parent()
-                        .ok_or("脚本目录无效")?
-                } else {
-                    std::path::Path::new(&a.cwd)
-                };
-                let directory = interpreter_script_path(&interpreter, &cwd.to_string_lossy())?;
-                c.args([
-                    "--noprofile",
-                    "--norc",
-                    "-c",
-                    WINDOWS_BASH_RUNNER,
-                    "handykit-runner",
-                ])
-                .arg(directory)
-                .arg(script);
-                // Do not silently execute inherited Bash initialization files in background tasks.
-                // Explicit per-task overrides below still take precedence.
-                c.env_remove("BASH_ENV").env_remove("ENV").env_remove("PWD");
-            } else {
-                c.arg("--").arg(script);
+            let mut c = Command::new(&a.interpreter);
+            if git_bash_launcher(task) {
+                c.args(GIT_BASH_HEADLESS_ARGS);
             }
-            let parent = interpreter.parent().ok_or("解释器目录无效")?;
-            let mut paths = vec![parent.to_path_buf()];
-            if parent
-                .file_name()
-                .is_some_and(|n| n.eq_ignore_ascii_case("bin"))
-            {
-                if let Some(root) = parent.parent() {
-                    let root = if root
-                        .file_name()
-                        .is_some_and(|n| n.eq_ignore_ascii_case("usr"))
-                    {
-                        root.parent().unwrap_or(root)
-                    } else {
-                        root
-                    };
-                    for path in [root.join("usr").join("bin"), root.join("bin")] {
-                        if path.is_dir() && !paths.contains(&path) {
-                            paths.push(path);
-                        }
-                    }
-                }
-            }
-            if let Some(path) = std::env::var_os("PATH") {
-                paths.extend(std::env::split_paths(&path));
-            }
-            c.env(
-                "PATH",
-                std::env::join_paths(paths).map_err(|e| format!("解释器 PATH 无效：{e}"))?,
-            );
+            c.arg("--").arg(script_argument(task));
             c
         };
         c
@@ -458,90 +307,6 @@ fn drain(
         }
     })
 }
-// Kill only the managed group/job owned by this run; never independent GUI apps.
-#[cfg(unix)]
-fn kill_tree(child: &mut std::process::Child) {
-    unsafe {
-        libc::kill(-(child.id() as i32), libc::SIGKILL);
-    }
-    let _ = child.kill();
-}
-#[cfg(windows)]
-struct Job(windows_sys::Win32::Foundation::HANDLE);
-#[cfg(windows)]
-impl Job {
-    fn assign(child: &std::process::Child) -> Result<Self, String> {
-        use std::os::windows::io::AsRawHandle;
-        use windows_sys::Win32::System::JobObjects::*;
-        unsafe {
-            let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
-            if job.is_null() {
-                return Err(std::io::Error::last_os_error().to_string());
-            }
-            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-            if SetInformationJobObject(
-                job,
-                JobObjectExtendedLimitInformation,
-                &info as *const _ as _,
-                std::mem::size_of_val(&info) as u32,
-            ) == 0
-                || AssignProcessToJobObject(job, child.as_raw_handle() as _) == 0
-            {
-                windows_sys::Win32::Foundation::CloseHandle(job);
-                return Err(std::io::Error::last_os_error().to_string());
-            }
-            Ok(Self(job))
-        }
-    }
-    fn kill(&self) {
-        unsafe {
-            windows_sys::Win32::System::JobObjects::TerminateJobObject(self.0, 1);
-        }
-    }
-}
-#[cfg(windows)]
-impl Drop for Job {
-    fn drop(&mut self) {
-        unsafe {
-            windows_sys::Win32::Foundation::CloseHandle(self.0);
-        }
-    }
-}
-#[cfg(windows)]
-fn resume_managed(child: &std::process::Child) -> Result<(), String> {
-    use windows_sys::Win32::{
-        Foundation::*,
-        System::{Diagnostics::ToolHelp::*, Threading::*},
-    };
-    unsafe {
-        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-        if snapshot == INVALID_HANDLE_VALUE {
-            return Err(std::io::Error::last_os_error().to_string());
-        }
-        let mut entry: THREADENTRY32 = std::mem::zeroed();
-        entry.dwSize = std::mem::size_of::<THREADENTRY32>() as u32;
-        let mut ok = Thread32First(snapshot, &mut entry);
-        let mut resumed = false;
-        while ok != 0 {
-            if entry.th32OwnerProcessID == child.id() {
-                let thread = OpenThread(THREAD_SUSPEND_RESUME, 0, entry.th32ThreadID);
-                if !thread.is_null() {
-                    resumed = ResumeThread(thread) != u32::MAX;
-                    CloseHandle(thread);
-                }
-                break;
-            }
-            ok = Thread32Next(snapshot, &mut entry);
-        }
-        CloseHandle(snapshot);
-        if resumed {
-            Ok(())
-        } else {
-            Err("无法恢复已纳入 Job 的受管进程".into())
-        }
-    }
-}
 fn failure(message: String) -> Outcome {
     Outcome {
         status: "failed".into(),
@@ -549,8 +314,12 @@ fn failure(message: String) -> Outcome {
         message,
     }
 }
-pub fn execute(task: &Task, ctrl: Arc<Control>) -> Outcome {
-    if let Err(e) = validate(task) {
+pub fn execute(
+    task: &Task,
+    ctrl: Arc<Control>,
+    plugins: Option<&dyn crate::PluginExecutor>,
+) -> Outcome {
+    if let Err(e) = validate(task, plugins) {
         return failure(e);
     }
     if ctrl.cancel.load(Ordering::SeqCst) {
@@ -558,6 +327,69 @@ pub fn execute(task: &Task, ctrl: Arc<Control>) -> Outcome {
             status: "cancelled".into(),
             code: None,
             message: "启动前已取消".into(),
+        };
+    }
+    if task.action.kind == "plugin" {
+        struct Finish(Arc<Control>);
+        impl Drop for Finish {
+            fn drop(&mut self) {
+                self.0.finished.store(true, Ordering::SeqCst);
+            }
+        }
+        let _finish = Finish(ctrl.clone());
+        let start = Instant::now();
+        let watchdog = task.timeout.map(|seconds| {
+            let c = ctrl.clone();
+            std::thread::spawn(move || {
+                while !c.finished.load(Ordering::SeqCst) {
+                    if start.elapsed() >= Duration::from_secs(seconds) {
+                        c.cancel.store(true, Ordering::SeqCst);
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(25));
+                }
+            })
+        });
+        let output_ctrl = ctrl.clone();
+        let sink: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |line| {
+            let mut o = output_ctrl.output.lock().unwrap();
+            if o.stdout.len() < 10 * 1024 * 1024 {
+                o.stdout.extend_from_slice(line.as_bytes());
+                o.stdout.push(b'\n');
+            } else {
+                o.truncated = true;
+            }
+        });
+        let result = plugins.unwrap().execute(
+            &task.action.target,
+            task.action.plugin_revision.unwrap(),
+            &ctrl.cancel,
+            sink,
+        );
+        ctrl.finished.store(true, Ordering::SeqCst);
+        if let Some(watch) = watchdog {
+            let _ = watch.join();
+        }
+        let stopped = ctrl.cancel.load(Ordering::SeqCst);
+        let timed_out = task
+            .timeout
+            .is_some_and(|n| start.elapsed() >= Duration::from_secs(n))
+            && stopped;
+        return Outcome {
+            status: if timed_out {
+                "timed_out"
+            } else if stopped {
+                "cancelled"
+            } else if result.is_ok() {
+                "succeeded"
+            } else {
+                "failed"
+            }
+            .into(),
+            code: None,
+            message: result
+                .err()
+                .unwrap_or_else(|| "原生插件执行完成；详见插件执行记录".into()),
         };
     }
     let mut cmd = match command(task) {
@@ -599,35 +431,19 @@ pub fn execute(task: &Task, ctrl: Arc<Control>) -> Outcome {
         }
     }
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000 | 0x00000004); // NO_WINDOW | CREATE_SUSPENDED; assign job before user code runs.
-    }
+    configure(&mut cmd);
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => return failure(format!("启动失败：{e}")),
     };
-    #[cfg(windows)]
-    let job = match Job::assign(&child) {
-        Ok(j) => j,
-        Err(e) => {
+    let tree = match ProcessTree::attach(&child) {
+        Ok(tree) => tree,
+        Err(error) => {
             let _ = child.kill();
             let _ = child.wait();
-            return failure(format!("无法建立受管进程组：{e}"));
+            return failure(format!("无法管理子进程：{error}"));
         }
     };
-    #[cfg(windows)]
-    if let Err(e) = resume_managed(&child) {
-        job.kill();
-        let _ = child.wait();
-        return failure(e);
-    }
     let stdout = drain(Box::new(child.stdout.take().unwrap()), ctrl.clone(), false);
     let stderr = drain(Box::new(child.stderr.take().unwrap()), ctrl.clone(), true);
     let start = Instant::now();
@@ -639,20 +455,19 @@ pub fn execute(task: &Task, ctrl: Arc<Control>) -> Outcome {
                 .is_some_and(|n| start.elapsed() >= Duration::from_secs(n))
         {
             let cancelled = ctrl.cancel.load(Ordering::SeqCst);
-            #[cfg(unix)]
-            kill_tree(&mut child);
-            #[cfg(windows)]
-            job.kill();
+            tree.kill();
+            let stop_message = tree
+                .warning()
+                .unwrap_or_else(|| "已请求停止进程及其进程树；外部操作结果需核对".into());
             let _ = child.wait();
             break Outcome {
                 status: if cancelled { "cancelled" } else { "timed_out" }.into(),
                 code: None,
                 message: if cancelled {
-                    "已停止受管进程组"
+                    stop_message
                 } else {
-                    "任务超过配置的超时时间，已停止受管进程组"
-                }
-                .into(),
+                    format!("任务超过配置的超时时间，{stop_message}")
+                },
             };
         }
         match child.try_wait() {
@@ -674,42 +489,20 @@ pub fn execute(task: &Task, ctrl: Arc<Control>) -> Outcome {
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(50)),
             Err(e) => {
-                #[cfg(unix)]
-                kill_tree(&mut child);
-                #[cfg(windows)]
-                job.kill();
+                tree.kill();
                 let _ = child.wait();
                 break failure(e.to_string());
             }
         }
     };
-    // Descendants retaining pipes cannot make log collection hang after the managed parent exits.
-    #[cfg(unix)]
-    kill_tree(&mut child);
-    #[cfg(windows)]
-    job.kill();
+    // The reader has a bounded drain after the supervised root exits.
+    tree.kill();
     ctrl.finished.store(true, Ordering::SeqCst);
     let _ = stdout.join();
     let _ = stderr.join();
     #[cfg(windows)]
-    if task.action.kind == "script" {
-        result.message.push_str(&format!(
-            "；实际解释器：{}；Windows 读取检查：通过；脚本路径：{}；工作目录：{}",
-            cmd.get_program().to_string_lossy(),
-            cmd.get_args()
-                .nth(
-                    if use_bash_runner(task, std::path::Path::new(cmd.get_program())) {
-                        6
-                    } else {
-                        1
-                    }
-                )
-                .unwrap_or_default()
-                .to_string_lossy(),
-            cmd.get_current_dir()
-                .unwrap_or(std::path::Path::new("."))
-                .display()
-        ));
+    if git_bash_launcher(task) {
+        result.message.push_str("；Git Bash 后台命令模式");
     }
     result
 }
@@ -717,83 +510,82 @@ pub fn execute(task: &Task, ctrl: Arc<Control>) -> Outcome {
 #[cfg(all(test, windows))]
 mod windows_tests {
     use super::*;
+    fn task(interpreter: &str, target: &str) -> Task {
+        serde_json::from_value(serde_json::json!({
+            "id":"", "revision":0, "name":"logical paths", "description":"",
+            "enabled":false, "cron":"* * * * *", "zone":"UTC", "timeout":5,
+            "action": {"kind":"script", "target":target, "interpreter":interpreter,
+                "args":[{"value":"中文 空格"},{"value":""},{"value":"$HOME"}],
+                "env":[], "cwd":r"D:\沙箱工作区", "instance":"reuse"}
+        }))
+        .unwrap()
+    }
     #[test]
-    fn msys_paths_and_terminal_validation() {
-        assert_eq!(shell_path(r"C:\脚本 目录\test.sh"), "/c/脚本 目录/test.sh");
-        assert_eq!(shell_path(r"\\?\C:\scripts\test.sh"), "/c/scripts/test.sh");
-        assert_eq!(
-            shell_path(r"\\?\UNC\server\share\test.sh"),
-            "//server/share/test.sh"
-        );
-        assert_eq!(
-            shell_path(r"D:\bsoft\project\01\sync_code\sync_code-merge.sh"),
-            "/d/bsoft/project/01/sync_code/sync_code-merge.sh"
-        );
-        for terminal in ["mintty.exe", "cmd.exe", "git-cmd.exe", "pwsh.exe"] {
-            assert!(windows_shell(&std::path::Path::new(r"C:\tools").join(terminal)).is_err());
+    fn configured_logical_paths_and_environment_are_preserved() {
+        // No physical files required: building a command must not inspect a backing
+        // path, find a sibling interpreter or launch cygpath in another context.
+        for interpreter in [
+            r"C:\Git\git-bash.exe",
+            r"C:\Git\bin\bash.exe",
+            r"C:\Git\usr\bin\sh.exe",
+        ] {
+            let task = task(interpreter, r"C:\映射目录\script with spaces.sh");
+            let cmd = command(&task).unwrap();
+            assert_eq!(cmd.get_program(), std::ffi::OsStr::new(interpreter));
+            let args: Vec<_> = cmd
+                .get_args()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect();
+            let mut expected = Vec::new();
+            if git_bash_launcher(&task) {
+                expected.extend(GIT_BASH_HEADLESS_ARGS.map(String::from));
+            }
+            expected.extend(
+                [
+                    "--",
+                    "C:/映射目录/script with spaces.sh",
+                    "中文 空格",
+                    "",
+                    "$HOME",
+                ]
+                .map(String::from),
+            );
+            assert_eq!(args, expected);
+            assert_eq!(
+                cmd.get_current_dir(),
+                Some(std::path::Path::new(r"D:\沙箱工作区"))
+            );
+            assert_eq!(
+                cmd.get_envs().count(),
+                0,
+                "no implicit PATH/HOME/MSYSTEM edits or env removals"
+            );
         }
     }
-}
-
-#[cfg(all(test, windows))]
-mod bash_context_tests {
-    use super::*;
-    use std::os::windows::process::CommandExt;
     #[test]
-    fn runner_sets_real_bash_directory_and_classifies_open_failures() {
-        let root = std::env::var_os("HANDYKIT_TEST_GIT_ROOT")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| r"C:\Program Files\Git".into());
-        let bash = root.join("usr/bin/bash.exe");
-        if !bash.is_file() {
-            assert!(
-                std::env::var_os("GITHUB_ACTIONS").is_none(),
-                "CI requires Git Bash"
-            );
-            return;
+    fn explicit_environment_overrides_are_preserved() {
+        let mut task = task(r"C:\Git\git-bash.exe", r"C:\scripts\script.sh");
+        task.action.env = vec![crate::model::Environment {
+            key: "PATH".into(),
+            value: r"C:\sandbox-tools".into(),
+            secret: false,
+        }];
+        let cmd = command(&task).unwrap();
+        assert_eq!(
+            cmd.get_envs().collect::<Vec<_>>(),
+            vec![(
+                std::ffi::OsStr::new("PATH"),
+                Some(std::ffi::OsStr::new(r"C:\sandbox-tools"))
+            )]
+        );
+    }
+    #[test]
+    fn unc_and_extended_paths_do_not_turn_into_backing_paths() {
+        for (input, expected) in [
+            (r"\\server\share\script.sh", "//server/share/script.sh"),
+            (r"\\?\C:\scripts\script.sh", "C:/scripts/script.sh"),
+        ] {
+            assert_eq!(script_argument(&task(r"C:\Git\bash.exe", input)), expected);
         }
-        let dir = std::env::temp_dir().join(format!("handykit-context-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("identity script.sh"),"test -f \"$0\" || exit 91; test \"$0\" = \"${BASH_SOURCE[0]}\" || exit 92; printf context-ok\n").unwrap();
-        let desired = interpreter_script_path(&bash, &dir.to_string_lossy()).unwrap();
-        let run = |cwd: &str, script: &str| {
-            Command::new(&bash)
-                .args([
-                    "--noprofile",
-                    "--norc",
-                    "-c",
-                    WINDOWS_BASH_RUNNER,
-                    "handykit-runner",
-                    cwd,
-                    script,
-                ])
-                .current_dir(std::env::temp_dir())
-                .env_remove("BASH_ENV")
-                .env_remove("ENV")
-                .env("PWD", r"C:\wrong-inherited-directory")
-                .stdin(Stdio::null())
-                .creation_flags(0x08000000)
-                .output()
-                .unwrap()
-        };
-        let ok = run(&desired, "./identity script.sh");
-        assert!(
-            ok.status.success(),
-            "{}",
-            String::from_utf8_lossy(&ok.stderr)
-        );
-        assert_eq!(ok.stdout, b"context-ok");
-        let no_file = run(&desired, "./missing-script.sh");
-        assert_eq!(no_file.status.code(), Some(127));
-        assert!(String::from_utf8_lossy(&no_file.stderr)
-            .contains("[HandyKit预检失败] Bash 无法打开脚本"));
-        let no_dir = run(
-            "/handykit-directory-that-does-not-exist",
-            "./identity script.sh",
-        );
-        assert_eq!(no_dir.status.code(), Some(125));
-        assert!(String::from_utf8_lossy(&no_dir.stderr)
-            .contains("[HandyKit预检失败] Bash 无法进入工作目录"));
-        let _ = std::fs::remove_dir_all(dir);
     }
 }

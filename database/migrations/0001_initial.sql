@@ -1,27 +1,28 @@
-CREATE TABLE settings (
-    key TEXT PRIMARY KEY,
-    value_json TEXT NOT NULL CHECK (json_valid(value_json)),
+CREATE TABLE timer_tasks (
+    id TEXT PRIMARY KEY,
+    revision INTEGER NOT NULL CHECK(revision > 0),
+    name TEXT NOT NULL CHECK(length(trim(name)) > 0),
+    enabled INTEGER NOT NULL CHECK(enabled IN (0,1)),
+    deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN (0,1)),
+    config_json TEXT NOT NULL CHECK(json_valid(config_json)),
     updated_at TEXT NOT NULL
 );
-CREATE TABLE scheduled_tasks (
+CREATE TABLE timer_runs (
     id TEXT PRIMARY KEY,
-    name TEXT NOT NULL CHECK (length(trim(name)) > 0),
-    cron_expression TEXT NOT NULL,
-    timezone TEXT NOT NULL,
-    enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
-    action_type TEXT NOT NULL DEFAULT 'reminder' CHECK (action_type = 'reminder'),
-    payload_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(payload_json)),
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-CREATE TABLE task_runs (
-    id TEXT PRIMARY KEY,
-    task_id TEXT NOT NULL REFERENCES scheduled_tasks(id) ON DELETE CASCADE,
+    task_id TEXT NOT NULL REFERENCES timer_tasks(id),
+    revision INTEGER NOT NULL,
+    source TEXT NOT NULL CHECK(source IN ('manual','schedule')),
     scheduled_at TEXT NOT NULL,
-    started_at TEXT,
+    started_at TEXT NOT NULL,
     finished_at TEXT,
-    status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'succeeded', 'failed', 'skipped')),
-    error_message TEXT,
-    UNIQUE (task_id, scheduled_at)
+    status TEXT NOT NULL CHECK(status IN ('running','succeeded','failed','launched','skipped','cancelled','timed_out','interrupted')),
+    exit_code INTEGER,
+    message TEXT NOT NULL DEFAULT '',
+    stdout TEXT NOT NULL DEFAULT '',
+    stderr TEXT NOT NULL DEFAULT '',
+    truncated INTEGER NOT NULL DEFAULT 0,
+    snapshot_json TEXT NOT NULL CHECK(json_valid(snapshot_json))
 );
-CREATE INDEX idx_task_runs_status ON task_runs(status, scheduled_at);
+CREATE UNIQUE INDEX timer_run_dispatch ON timer_runs(task_id, revision, scheduled_at) WHERE source='schedule';
+CREATE INDEX timer_run_history ON timer_runs(started_at DESC);
+CREATE INDEX timer_run_task ON timer_runs(task_id,started_at DESC);

@@ -1,0 +1,23 @@
+{
+  "format": "handykit.plugin",
+  "apiVersion": 2,
+  "id": "dev.handykit.code-sync",
+  "version": "0.2.0",
+  "name": "Git → ZIP → SVN 同步",
+  "description": "将既有同步脚本转换为原生流程：配置导入、Git 合并推送、ZIP 归档、SVN 提交、取消与执行记录。不执行 sh。",
+  "operations": [
+    "code-sync.run"
+  ],
+  "workflow": {
+    "perRepository": [
+      "git.clone",
+      "git.merge-if-configured",
+      "git.push",
+      "zip.archive",
+      "fs.cleanup-clone"
+    ],
+    "afterRepositories": [
+      "svn.commit-archives"
+    ]
+  }
+}

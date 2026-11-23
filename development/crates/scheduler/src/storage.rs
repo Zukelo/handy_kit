@@ -1,22 +1,15 @@
 use crate::model::{Run, Task};
 use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
-use std::path::Path;
 pub type Result<T> = std::result::Result<T, String>;
-pub fn migrate(conn: &mut Connection, path: &Path) -> Result<()> {
+pub fn migrate(conn: &mut Connection) -> Result<()> {
     conn.busy_timeout(std::time::Duration::from_secs(5))
         .map_err(|e| e.to_string())?;
     conn.execute_batch("PRAGMA foreign_keys=ON; CREATE TABLE IF NOT EXISTS schema_migrations(version TEXT PRIMARY KEY,checksum TEXT NOT NULL,applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);").map_err(|e|e.to_string())?;
-    let migrations = [
-        (
-            "0001_initial.sql",
-            include_str!("../../../../database/migrations/0001_initial.sql"),
-        ),
-        (
-            "0002_timer_runtime.sql",
-            include_str!("../../../../database/migrations/0002_timer_runtime.sql"),
-        ),
-    ];
+    let migrations = [(
+        "0001_initial.sql",
+        include_str!("../../../../database/migrations/0001_initial.sql"),
+    )];
     {
         let mut stmt = conn
             .prepare("SELECT version FROM schema_migrations")
@@ -33,7 +26,6 @@ pub fn migrate(conn: &mut Connection, path: &Path) -> Result<()> {
             }
         }
     }
-    let mut backed_up = false;
     for (version, sql) in migrations {
         let checksum = format!("{:x}", Sha256::digest(sql.as_bytes()));
         let old: Option<String> = conn
@@ -49,25 +41,6 @@ pub fn migrate(conn: &mut Connection, path: &Path) -> Result<()> {
                 return Err(format!("迁移校验和不符：{version}，未启动调度器"));
             }
             continue;
-        }
-        if !backed_up
-            && path.exists()
-            && conn
-                .query_row("SELECT count(*) FROM schema_migrations", [], |r| {
-                    r.get::<_, i64>(0)
-                })
-                .unwrap_or(0)
-                > 0
-        {
-            let backup =
-                path.with_extension(format!("{}.backup", chrono::Utc::now().timestamp_millis()));
-            conn.backup(
-                rusqlite::MAIN_DB,
-                &backup,
-                None::<fn(rusqlite::backup::Progress)>,
-            )
-            .map_err(|e| format!("升级前备份失败：{e}"))?;
-            backed_up = true;
         }
         let tx = conn.transaction().map_err(|e| e.to_string())?;
         tx.execute_batch(sql).map_err(|e| e.to_string())?;

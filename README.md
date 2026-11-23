@@ -1,56 +1,49 @@
 # 小工坊 · HandyKit
 
-个人开发工具集，采用 Rust + Tauri 2，目标平台为 Windows、macOS、Linux。
+本地开发工具集，使用 Rust、Tauri 2 和 TypeScript，支持 Windows、macOS、Linux。
 
-## 目录
+当前版本为 **0.2.0 全新安装基线**。已实现多标签工作区、收藏与最近使用、后台定时任务、独立插件安装及 Git → ZIP → SVN 原生同步。JSON/XML 等未实现工具明确显示占位页，不执行模拟业务。
 
-- `docs/`：需求、设计、原型、数据库设计、决策及交付文档。
-- `development/`：源码与构建配置。
-- `database/`：SQL 迁移、测试种子、开发数据和备份；真实数据库不提交。
-- `scripts/`：初始化与校验脚本。
+## 当前能力
 
-从 [文档入口](docs/README.md) 开始。当前已实现桌面框架与首页：分类导航、多标签工作区、收藏、常用工具、最近打开和工作区恢复。定时任务已接入 Rust 后台调度、真实脚本/程序/app 执行、SQLite 持久化和执行记录；其他四个工具仍为占位页。详见 [定时任务开发交付](docs/delivery/07-定时任务功能开发交付.md)。
+- 定时脚本严格调用配置的解释器。Windows 使用普通子进程启动；选择 `git-bash.exe` 时由该启动器初始化登录环境并后台运行，收集实时标准输出/错误及退出码。
+- 程序任务支持超时、取消、防重叠、并发限制与执行历史；独立应用只记录启动请求结果。
+- [Git/SVN 检查插件](plugins/code-sync-check/README.md)验证本地工具和临时仓库读写；[原生同步插件](plugins/code-sync/README.md)支持静态配置导入、原生 ZIP、分阶段记录与暂停状态的定时计划。
+- 不内置 Bash，不自动替换解释器，不猜测沙箱的物理盘映射。Git/SVN 由用户的本机环境提供。
 
-直接打开 [GUI 交互原型](docs/prototypes/index.html) 可查看首页、分类菜单与多标签工作区，无需安装依赖。
+## 开发与检查
 
-## 开发
-
-安装 Rust stable、Node.js 22+ 及 [Tauri 平台依赖](https://v2.tauri.app/start/prerequisites/)。Rust 最低版本为 1.90，建议通过 rustup 使用 stable；若与 Homebrew Rust 共存，需确保 `$HOME/.cargo/bin` 优先于 Homebrew 路径。
+需要 Rust stable（最低 1.90）、Node.js 22.12+ 和 [Tauri 平台依赖](https://v2.tauri.app/start/prerequisites/)。
 
 ```sh
 cd development/apps/desktop
 npm ci
-npm run dev
-npm run tauri:dev
+npm run dev          # 浏览器预览；不执行本机程序
+npm run tauri:dev    # 桌面程序
+npm test
+npm run build
+npm run format:check
 ```
 
-`dev` 仅启动网页；`tauri:dev` 启动桌面外壳。依赖由 package-lock.json 和 Cargo.lock 锁定；Rust 使用 stable 工具链。
+Rust 模块、测试与质量检查命令见 [开发说明](development/README.md)。当前架构及审查结果见 [代码审查与清理报告](docs/delivery/22-代码审查与全新基线整理.md)。
 
-```sh
-npm run build:online
-npm run build:offline
-```
+## 数据与插件
 
-上述两个命令用于 Windows 的两种安装方式，应在 Windows 构建。macOS/Linux 使用 `npm run tauri:build`，离线交付还须执行平台验收清单。
+应用在系统用户数据目录的 `runtime/` 下创建 SQLite 和插件目录。首次启动没有预设任务和插件；工作区偏好保存在当前 WebView 的本机存储。不会读取或迁移 0.1.x 旧数据布局，也不会删除旧目录。此基线不提供历史数据库和旧插件 API 的兼容分支。
 
-数据库开发初始化：`python3 scripts/init_database.py`。生产运行时使用系统应用数据目录，不能写入安装目录或仓库。定时任务需要 `tauri:dev` 或本机 App；纯网页模式不执行程序。
+插件包使用统一的 `handykit.plugin` API 2，是声明式原生能力包。安装、停用和卸载在插件管理中完成；同步配置变化会暂停关联计划。脚本与原生同步应只启用一个实际业务计划，避免重复操作。
 
-## 分支与发布
+开发库初始化：`python3 scripts/init_database.py`。真实运行数据、凭据和构建产物不提交版本管理。
 
-仓库：[Zukelo/handy_kit](https://github.com/Zukelo/handy_kit)。`develop` 用于开发，`main` 用于稳定版本。
-
-本机开发包：`npm run build:dev`（debug 可执行文件）或 `npm run package:dev`（本机 debug 安装包）。版本标签 `v*` 由 GitHub Actions 构建 Windows、macOS 和 Linux 安装包并发布到 Releases，日常提交只做基础检查。
-
-详见 [Git 与版本发布流程](docs/delivery/03-Git与版本发布流程.md)。
-
-## 本机 App
+## 构建
 
 ```sh
 cd development/apps/desktop
-npm test
-npm run package:local
+npm run build:online   # Windows 在线安装包
+npm run build:offline  # Windows WebView2 离线安装包（按需）
+npm run package:local  # 当前平台开发包
 ```
 
-macOS Apple Silicon 的开发 App 输出到 `builds/darwin-arm64/HandyKit.app`，可以直接双击运行。详见 [框架与首页开发交付](docs/delivery/04-框架与首页开发交付.md)。
+Windows 本机交叉交付默认只生成在线安装包与独立 exe。macOS/Linux 使用 `npm run tauri:build`。依赖锁定在 package-lock.json 和各 Rust 工程的 Cargo.lock；格式与静态检查在 CI 中执行。
 
-关闭主窗口后，小工坊会驻留在 macOS 菜单栏或 Windows/Linux 托盘。可选择「显示主窗口」恢复，使用「彻底退出小工坊」结束程序；macOS Cmd+Q 对应隐藏到菜单栏。图标采用「屋檐＋工字工作台」设计，详见 [菜单栏托盘与品牌图标](docs/delivery/05-菜单栏托盘与品牌图标.md)。
+[文档入口](docs/README.md)包含当前规范及历史设计记录；静态原型位于 `docs/prototypes/`，与实际运行代码分开。

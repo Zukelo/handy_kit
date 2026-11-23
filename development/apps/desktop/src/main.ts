@@ -6,18 +6,25 @@ import { requiredElement } from './components/html.ts';
 import metadata from '../package.json';
 
 // Lazy access also handles environments in which obtaining localStorage throws.
-new Application(requiredElement<HTMLElement>('#app'), {
-  getItem: key => window.localStorage.getItem(key),
-  setItem: (key, value) => window.localStorage.setItem(key, value),
-}, metadata.version);
+new Application(
+  requiredElement<HTMLElement>('#app'),
+  {
+    getItem: (key) => window.localStorage.getItem(key),
+    setItem: (key, value) => window.localStorage.setItem(key, value),
+  },
+  metadata.version,
+);
 
 // Keep native window chrome in sync with the selected semantic appearance.
 import { invoke, isTauri } from '@tauri-apps/api/core';
 function applyNativeAppearance(): void {
-  if (isTauri()) void invoke('set_appearance', { mode: document.documentElement.dataset.appearance ?? 'system' }).catch(error => console.warn('Native appearance unavailable', error));
+  if (isTauri())
+    void invoke('set_appearance', {
+      mode: document.documentElement.dataset.appearance ?? 'system',
+    }).catch((error) => console.warn('Native appearance unavailable', error));
 }
 document.addEventListener('handykit:appearance', applyNativeAppearance);
 applyNativeAppearance();
 
 import { setupTaskLifecycle } from './tasks/lifecycle.ts';
-void setupTaskLifecycle().catch(error => console.warn('退出监听不可用', error));
+void setupTaskLifecycle().catch((error) => console.warn('退出监听不可用', error));

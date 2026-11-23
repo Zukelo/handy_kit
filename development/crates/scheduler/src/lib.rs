@@ -3,16 +3,25 @@ mod executor;
 pub mod model;
 mod storage;
 use chrono::{DateTime, TimeZone, Utc};
-use fs2::FileExt;
 use model::*;
 use rusqlite::{params, Connection};
 use std::{
     collections::HashMap,
     fs::File,
-    path::{Path, PathBuf},
+    path::Path,
     sync::{atomic::Ordering, Arc, Mutex},
 };
 use storage::Result;
+pub trait PluginExecutor: Send + Sync {
+    fn validate(&self, id: &str, revision: u64) -> std::result::Result<(), String>;
+    fn execute(
+        &self,
+        id: &str,
+        revision: u64,
+        cancel: &std::sync::atomic::AtomicBool,
+        output: Arc<dyn Fn(&str) + Send + Sync>,
+    ) -> std::result::Result<(), String>;
+}
 const CONCURRENCY: usize = 3;
 struct Inner {
     db: Connection,
@@ -24,12 +33,18 @@ struct Inner {
 struct Shared {
     inner: Mutex<Inner>,
     _owner: File,
-    pub directory: PathBuf,
+    plugins: Option<Arc<dyn PluginExecutor>>,
 }
 #[derive(Clone)]
 pub struct Scheduler(Arc<Shared>);
 impl Scheduler {
     pub fn open(directory: &Path) -> Result<Self> {
+        Self::open_with_plugins(directory, None)
+    }
+    pub fn open_with_plugins(
+        directory: &Path,
+        plugins: Option<Arc<dyn PluginExecutor>>,
+    ) -> Result<Self> {
         std::fs::create_dir_all(directory).map_err(|e| e.to_string())?;
         #[cfg(unix)]
         {
@@ -45,11 +60,11 @@ impl Scheduler {
             .open(directory.join("scheduler.lock"))
             .map_err(|e| e.to_string())?;
         owner
-            .try_lock_exclusive()
+            .try_lock()
             .map_err(|_| "小工坊已在此用户目录运行，请从菜单栏/托盘显示已有窗口".to_string())?;
         let path = directory.join("handykit.sqlite3");
         let mut db = Connection::open(&path).map_err(|e| e.to_string())?;
-        storage::migrate(&mut db, &path)?;
+        storage::migrate(&mut db)?;
         storage::cleanup(&db)?;
         let cursor = Utc::now().timestamp() / 60 * 60;
         Ok(Self(Arc::new(Shared {
@@ -61,7 +76,7 @@ impl Scheduler {
                 notice: "关闭窗口后继续调度；彻底退出、关机和休眠期间不执行；遗漏不补跑".into(),
             }),
             _owner: owner,
-            directory: directory.into(),
+            plugins,
         })))
     }
     pub fn start(&self) {
@@ -80,14 +95,11 @@ impl Scheduler {
             }
         });
     }
-    pub fn directory(&self) -> &Path {
-        &self.0.directory
-    }
     pub fn overview(&self) -> Result<Overview> {
         let inner = self.0.inner.lock().map_err(|e| e.to_string())?;
         let mut items = Vec::new();
         for task in storage::tasks(&inner.db)? {
-            let issue = executor::validate(&task).err();
+            let issue = executor::validate(&task, self.0.plugins.as_deref()).err();
             let next = if task.enabled {
                 cron::Cron::parse(&task.cron).ok().and_then(|c| {
                     task.zone
@@ -121,7 +133,7 @@ impl Scheduler {
         }
         let preview = cron::preview(&task.cron, &task.zone, Utc::now())?;
         task.cron = preview.expression;
-        executor::validate(&task)?;
+        executor::validate(&task, self.0.plugins.as_deref())?;
         if serde_json::to_vec(&task).map_err(|e| e.to_string())?.len() > 512 * 1024 {
             return Err("任务配置超过 512 KiB".into());
         }
@@ -131,7 +143,7 @@ impl Scheduler {
         }
         if task.id.is_empty() {
             if storage::tasks(&inner.db)?.len() >= 500 {
-                return Err("首版最多保存 500 项任务".into());
+                return Err("最多保存 500 项任务".into());
             }
             task.id = uuid::Uuid::new_v4().to_string();
             task.revision = 1;
@@ -177,6 +189,19 @@ impl Scheduler {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
+    pub fn pause_plugin_tasks(&self, plugin_id: &str) -> Result<usize> {
+        let inner = self.0.inner.lock().map_err(|e| e.to_string())?;
+        let mut count = 0;
+        for mut task in storage::tasks(&inner.db)? {
+            if task.enabled && task.action.kind == "plugin" && task.action.target == plugin_id {
+                task.enabled = false;
+                task.revision += 1;
+                inner.db.execute("UPDATE timer_tasks SET enabled=0,revision=?,config_json=?,updated_at=? WHERE id=?",params![task.revision,serde_json::to_string(&task).map_err(|e|e.to_string())?,Utc::now().to_rfc3339(),task.id]).map_err(|e|e.to_string())?;
+                count += 1;
+            }
+        }
+        Ok(count)
+    }
     pub fn history(&self, task_id: Option<&str>, offset: u32) -> Result<Vec<Run>> {
         let inner = self.0.inner.lock().unwrap();
         storage::runs(&inner.db, task_id, None, offset)
@@ -189,8 +214,8 @@ impl Scheduler {
             .ok_or("记录不存在")?;
         if let Some((_, ctrl)) = inner.running.get(id) {
             let o = ctrl.output.lock().unwrap();
-            run.stdout = String::from_utf8_lossy(&o.stdout).into();
-            run.stderr = String::from_utf8_lossy(&o.stderr).into();
+            run.stdout = executor::decode_output(&o.stdout, false);
+            run.stderr = executor::decode_output(&o.stderr, false);
             run.truncated = o.truncated;
         }
         Ok(run)
@@ -261,7 +286,7 @@ impl Scheduler {
         let run_id_copy = run_id.clone();
         std::thread::spawn(move || {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                executor::execute(&task, ctrl.clone())
+                executor::execute(&task, ctrl.clone(), service.0.plugins.as_deref())
             }))
             .unwrap_or(executor::Outcome {
                 status: "interrupted".into(),
@@ -270,7 +295,7 @@ impl Scheduler {
             });
             let mut inner = service.0.inner.lock().unwrap();
             let o = ctrl.output.lock().unwrap();
-            let written=inner.db.execute("UPDATE timer_runs SET status=?,exit_code=?,finished_at=?,message=?,stdout=?,stderr=?,truncated=? WHERE id=?",params![result.status,result.code,Utc::now().to_rfc3339(),result.message,String::from_utf8_lossy(&o.stdout),String::from_utf8_lossy(&o.stderr),o.truncated,run_id_copy]);
+            let written=inner.db.execute("UPDATE timer_runs SET status=?,exit_code=?,finished_at=?,message=?,stdout=?,stderr=?,truncated=? WHERE id=?",params![result.status,result.code,Utc::now().to_rfc3339(),result.message,executor::decode_output(&o.stdout, true),executor::decode_output(&o.stderr, true),o.truncated,run_id_copy]);
             if let Err(e) = written {
                 inner.notice = format!("执行结果保存失败：{e}，重启后将标为中断");
             }

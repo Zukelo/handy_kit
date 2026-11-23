@@ -1,0 +1,133 @@
+.plugins-view {
+  max-width: 1260px;
+  margin: 0 auto;
+}
+.plugin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.plugin-header h1,
+.plugin-header h2 {
+  margin: 0;
+}
+.plugin-header p,
+.plugin-card p {
+  color: var(--hk-text-secondary);
+  line-height: 1.6;
+}
+.plugin-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.plugin-card {
+  border: 1px solid var(--hk-separator);
+  background: var(--hk-surface);
+  padding: 20px;
+  border-radius: var(--hk-radius-card);
+  margin-bottom: 16px;
+  overflow-wrap: anywhere;
+}
+.plugin-card h2,
+.plugin-card h3 {
+  margin-top: 0;
+}
+.plugin-card small,
+.plugin-operations {
+  color: var(--hk-text-secondary);
+  font-size: var(--hk-text-caption);
+}
+.plugin-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.plugins-view .button {
+  padding: 8px 12px;
+}
+.plugins-view button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.plugin-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0;
+  font-size: var(--hk-text-label);
+  color: var(--hk-text-secondary);
+}
+.plugin-card input {
+  padding: 10px;
+  border: 1px solid var(--hk-control-border);
+  border-radius: var(--hk-radius-control);
+  color: var(--hk-text-primary);
+  background: var(--hk-surface-inset);
+  width: 100%;
+  font: inherit;
+}
+.plugin-error,
+.plugin-fail {
+  color: var(--hk-danger);
+  background: var(--hk-danger-bg);
+}
+.plugin-pass strong {
+  color: var(--hk-success);
+}
+.plugin-results pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--hk-text-primary);
+  font: var(--hk-text-label) / 1.6 var(--hk-font-mono);
+}
+@media (max-width: 1050px) {
+  .plugin-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sync-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 20px;
+}
+.sync-input {
+  display: flex;
+  gap: 8px;
+}
+.sync-input input {
+  flex: 1;
+  min-width: 0;
+}
+.sync-repo {
+  border: 1px solid var(--hk-separator);
+  border-radius: var(--hk-radius-control);
+  margin: 16px 0;
+  padding: 16px;
+}
+.sync-dirty {
+  color: var(--hk-warning);
+}
+.sync-run {
+  margin-top: 24px;
+}
+.sync-log {
+  max-height: 420px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 16px;
+  background: var(--hk-surface-inset);
+  color: var(--hk-text-primary);
+  font: var(--hk-text-label) / 1.6 var(--hk-font-mono);
+}
+@media (max-width: 1000px) {
+  .sync-fields {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,6 +1,8 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
+mod blocking;
 mod desktop;
+mod plugins;
 mod tasks;
 use tauri::Manager;
 
@@ -23,6 +25,20 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             set_appearance,
+            plugins::plugins_list,
+            plugins::plugins_install,
+            plugins::plugins_toggle,
+            plugins::plugins_uninstall,
+            plugins::plugins_run,
+            plugins::plugins_sync_profile,
+            plugins::plugins_sync_save,
+            plugins::plugins_sync_import,
+            plugins::plugins_sync_check,
+            plugins::plugins_sync_start,
+            plugins::plugins_sync_history,
+            plugins::plugins_sync_detail,
+            plugins::plugins_sync_cancel,
+            plugins::plugins_sync_schedule,
             tasks::timer_overview,
             tasks::timer_preview,
             tasks::timer_save,
@@ -39,8 +55,19 @@ fn main() {
         ])
         .manage(desktop::DesktopState::default())
         .setup(|app| {
-            let service = handykit_scheduler::Scheduler::open(&app.path().app_data_dir()?)
-                .map_err(std::io::Error::other)?;
+            let data_dir = app.path().app_data_dir()?.join("runtime");
+            let plugin_host = std::sync::Arc::new(
+                handykit_plugin_host::Host::open(data_dir.join("plugins"))
+                    .map_err(std::io::Error::other)?,
+            );
+            let service = handykit_scheduler::Scheduler::open_with_plugins(
+                &data_dir,
+                Some(std::sync::Arc::new(plugins::ScheduledPlugins(
+                    plugin_host.clone(),
+                ))),
+            )
+            .map_err(std::io::Error::other)?;
+            app.manage(plugins::PluginState(plugin_host));
             app.manage(service.clone());
             desktop::setup(app)?;
             service.start();

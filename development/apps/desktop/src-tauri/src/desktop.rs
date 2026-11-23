@@ -162,14 +162,6 @@ pub fn on_run_event(app: &AppHandle, event: tauri::RunEvent) {
     }
     match event {
         tauri::RunEvent::Exit => lifecycle_log(app, "process exiting"),
-        // Programmatic app.exit(0), restart, and explicit tray quit remain real exits.
-        tauri::RunEvent::ExitRequested {
-            code: None, api, ..
-        } => {
-            if hide_main_window(app) {
-                api.prevent_exit();
-            }
-        }
         #[cfg(target_os = "macos")]
         tauri::RunEvent::Reopen { .. } => show_main_window(app),
         _ => {}

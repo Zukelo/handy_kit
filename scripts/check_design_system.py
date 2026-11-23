@@ -38,7 +38,7 @@ if __name__=='__main__':
     subprocess.run([sys.executable,str(ROOT/'scripts/sync_design_system.py'),'--check'],check=True)
     rows=measurements()
     failures=[row for row in rows if row[4]<row[3]]
-    for path in ['development/apps/desktop/src/style.css','development/apps/desktop/src/styles/workbench.css','docs/prototypes/tasks/tasks.css','development/design-system/components.css','development/apps/desktop/src/tasks/tasks.css']:
+    for path in ['docs/prototypes/assets/workbench.css','development/apps/desktop/src/styles/workbench.css','docs/prototypes/tasks/tasks.css','development/design-system/components.css','development/apps/desktop/src/tasks/tasks.css']:
         content=(ROOT/path).read_text()
         if re.search(r'#[0-9a-fA-F]{3,8}\b|rgba?\(',content):failures.append(('hardcoded color',path))
     if failures:

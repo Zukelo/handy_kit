@@ -24,6 +24,8 @@ pub struct Action {
     pub env: Vec<Environment>,
     pub cwd: String,
     pub instance: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plugin_revision: Option<u64>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

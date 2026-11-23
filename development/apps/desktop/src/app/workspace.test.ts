@@ -1,11 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { closeAllTabs, closeOtherTabs, closeTab, LEGACY_KEY, loadWorkspace, normalizeWorkspace, openTab, saveWorkspace, STORAGE_KEY, toggleFavorite } from './workspace.ts';
+import {
+  closeAllTabs,
+  closeOtherTabs,
+  closeTab,
+  loadWorkspace,
+  normalizeWorkspace,
+  openTab,
+  saveWorkspace,
+  STORAGE_KEY,
+  toggleFavorite,
+} from './workspace.ts';
 import { matchesSearch, tools } from './tools.ts';
 
 const fresh = () => normalizeWorkspace(undefined);
 test('corrupt storage and invalid tool IDs cannot break startup', () => {
-  const state = normalizeWorkspace({ tabs: ['xml', 'home', 'xml', 'unknown'], active: 'unknown', favorites: ['json', 'json', 42], recent: [null, 'tasks', 'unknown'], collapsedCategories: ['unknown', '格式与校验'], sidebarCollapsed: 'true' });
+  const state = normalizeWorkspace({
+    tabs: ['xml', 'home', 'xml', 'unknown'],
+    active: 'unknown',
+    favorites: ['json', 'json', 42],
+    recent: [null, 'tasks', 'unknown'],
+    collapsedCategories: ['unknown', '格式与校验'],
+    sidebarCollapsed: 'true',
+  });
   assert.deepEqual(state.tabs, ['home', 'xml']);
   assert.equal(state.active, 'home');
   assert.deepEqual(state.favorites, ['json']);
@@ -15,17 +32,31 @@ test('corrupt storage and invalid tool IDs cannot break startup', () => {
   assert.equal(loadWorkspace({ getItem: () => '{invalid', setItem() {} }).state.active, 'home');
   assert.deepEqual(normalizeWorkspace(null), fresh());
 });
-test('legacy prototype preferences are normalized and can be saved as v2', () => {
-  const records = new Map([[LEGACY_KEY, JSON.stringify({ tabs: ['xml'], active: 'xml', favorites: [] })]]);
-  const storage = { getItem: (key: string) => records.get(key) ?? null, setItem: (key: string, value: string) => { records.set(key, value); } };
+test('current workspace preferences are saved and restored', () => {
+  const records = new Map([
+    [STORAGE_KEY, JSON.stringify({ tabs: ['xml'], active: 'xml', favorites: [] })],
+  ]);
+  const storage = {
+    getItem: (key: string) => records.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      records.set(key, value);
+    },
+  };
   const loaded = loadWorkspace(storage);
   assert.equal(loaded.state.active, 'xml');
   assert.deepEqual(loaded.state.favorites, []);
   assert.equal(saveWorkspace(storage, loaded.state), true);
-  assert.equal(JSON.parse(records.get(STORAGE_KEY)!).version, 2);
+  assert.equal(JSON.parse(records.get(STORAGE_KEY)!).version, 1);
 });
 test('denied storage falls back to a usable in-memory workspace', () => {
-  const storage = { getItem(): never { throw new Error('denied'); }, setItem(): never { throw new Error('quota'); } };
+  const storage = {
+    getItem(): never {
+      throw new Error('denied');
+    },
+    setItem(): never {
+      throw new Error('quota');
+    },
+  };
   assert.equal(loadWorkspace(storage).available, false);
   assert.deepEqual(loadWorkspace(storage).state, fresh());
   assert.equal(saveWorkspace(storage, fresh()), false);

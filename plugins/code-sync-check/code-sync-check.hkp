@@ -1,0 +1,9 @@
+{
+  "format": "handykit.plugin",
+  "apiVersion": 2,
+  "id": "dev.handykit.code-sync-check",
+  "version": "0.2.0",
+  "name": "Git / SVN 可用性检查",
+  "description": "检查 Git、SVN、工作目录和沙箱文件可见性；可在隔离临时目录进行本地读写自检，不连接真实远端。",
+  "operations": ["workspace.read", "git.version", "svn.version", "git.local-roundtrip", "svn.local-roundtrip"]
+}

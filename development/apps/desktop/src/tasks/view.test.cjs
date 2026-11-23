@@ -1,18 +1,371 @@
-const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path'),ts=require('typescript');
-const {parseHTML}=require('linkedom');
-function harness(native=true){
- const {window,document}=parseHTML('<html><body><section id="tool"></section></body></html>');
- const proto=window.HTMLElement.prototype;proto.showModal=function(){this.setAttribute('open','')};proto.close=function(){this.removeAttribute('open');this.dispatchEvent(new window.Event('close'))};proto.focus=function(){};
- Object.defineProperty(window.HTMLSelectElement.prototype,'value',{get(){return [...this.querySelectorAll('option')].find(o=>o.hasAttribute('selected'))?.getAttribute('value')||this.querySelector('option')?.getAttribute('value')||''},set(v){for(const o of this.querySelectorAll('option')){if(o.getAttribute('value')===v)o.setAttribute('selected','');else o.removeAttribute('selected');}},configurable:true});
- let task=null,run=null,calls=[],version=0,confirmation=true;const clone=v=>JSON.parse(JSON.stringify(v));
- const invoke=async(command,args)=>{calls.push({command,args:clone(args)});switch(command){case'timer_confirm':return confirmation;case'timer_platform':return'linux';case'timer_overview':return{tasks:task?[{task:clone(task),next:null,last:run,issue:null}]:[],running:0,concurrency:3,stopping:false,notice:'后台调度'};case'timer_preview':if(args.expression.startsWith('bad'))throw Error('Cron 无效');return{expression:args.expression,description:'计划已校验',times:['2026-12-01T01:00:00Z'],fields:[]};case'timer_save':if(!args.task.name)throw Error('请填写任务名称');task={...clone(args.task),id:args.task.id||'saved-task',revision:++version};return clone(task);case'timer_toggle':task.enabled=args.enabled;return clone(task);case'timer_pick':return'/tmp/real-looking.sh';case'timer_run':run={id:'run-1',taskId:task.id,revision:task.revision,source:'manual',scheduledAt:'2026-12-01T01:00:00Z',startedAt:'2026-12-01T01:00:00Z',finishedAt:'2026-12-01T01:00:01Z',status:'failed',exitCode:23,message:'受管进程异常退出',stdout:'<script>untrusted()</script>',stderr:'Git Bash error detail',truncated:false,snapshot:clone(task)};return run.id;case'timer_run_detail':return clone(run);case'timer_history':return run?[clone(run)]:[];case'timer_delete':task=null;return;default:throw Error(command);}};
- const context=vm.createContext({console,document,window:Object.assign(window,{confirm:()=>true}),navigator:{clipboard:{writeText:async()=>{}}},setInterval:()=>1,clearInterval(){},setTimeout:(f)=>setTimeout(f,5),clearTimeout});
- const cache={};function load(file){if(cache[file])return cache[file];const exports={};const source=ts.transpileModule(fs.readFileSync(path.join(__dirname,file),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;const requireMock=name=>name==='@tauri-apps/api/core'?{invoke,isTauri:()=>native}:name.endsWith('html.ts')?{escapeHTML:v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}:name.endsWith('.css')?{}:load(name.replace('./',''));const factory=vm.runInContext(`(function(require,exports){${source}\n})`,context);factory(requireMock,exports);cache[file]=exports;return exports;}
- const {TasksView}=load('view.ts');const view=new TasksView(document.querySelector('#tool'));
- const $=s=>document.querySelector(s);const click=selector=>{assert.ok($(selector),selector);$(selector).dispatchEvent(new window.Event('click',{bubbles:true}));};const value=(selector,v,event='input')=>{assert.ok($(selector),selector);$(selector).value=v;$(selector).dispatchEvent(new window.Event(event,{bubbles:true}));};
- return{view,document,window,$,click,value,calls,setConfirmation:value=>{confirmation=value},get task(){return task},get run(){return run}};
+const test = require('node:test'),
+  assert = require('node:assert/strict'),
+  fs = require('node:fs'),
+  vm = require('node:vm'),
+  path = require('node:path'),
+  ts = require('typescript');
+const { parseHTML } = require('linkedom');
+function harness(native = true, platform = 'linux') {
+  const { window, document } = parseHTML('<html><body><section id="tool"></section></body></html>');
+  const proto = window.HTMLElement.prototype;
+  proto.showModal = function () {
+    this.setAttribute('open', '');
+  };
+  proto.close = function () {
+    this.removeAttribute('open');
+    this.dispatchEvent(new window.Event('close'));
+  };
+  proto.focus = function () {};
+  Object.defineProperty(window.HTMLSelectElement.prototype, 'value', {
+    get() {
+      return (
+        [...this.querySelectorAll('option')]
+          .find((o) => o.hasAttribute('selected'))
+          ?.getAttribute('value') ||
+        this.querySelector('option')?.getAttribute('value') ||
+        ''
+      );
+    },
+    set(v) {
+      for (const o of this.querySelectorAll('option')) {
+        if (o.getAttribute('value') === v) o.setAttribute('selected', '');
+        else o.removeAttribute('selected');
+      }
+    },
+    configurable: true,
+  });
+  let task = null,
+    run = null,
+    calls = [],
+    version = 0,
+    confirmation = true;
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const invoke = async (command, args) => {
+    calls.push({ command, args: clone(args) });
+    switch (command) {
+      case 'timer_confirm':
+        return confirmation;
+      case 'timer_platform':
+        return platform;
+      case 'timer_overview':
+        return {
+          tasks: task ? [{ task: clone(task), next: null, last: run, issue: null }] : [],
+          running: 0,
+          concurrency: 3,
+          stopping: false,
+          notice: '后台调度',
+        };
+      case 'timer_preview':
+        if (args.expression.startsWith('bad')) throw Error('Cron 无效');
+        return {
+          expression: args.expression,
+          description: '计划已校验',
+          times: ['2026-12-01T01:00:00Z'],
+          fields: [],
+        };
+      case 'timer_save':
+        if (!args.task.name) throw Error('请填写任务名称');
+        task = { ...clone(args.task), id: args.task.id || 'saved-task', revision: ++version };
+        return clone(task);
+      case 'timer_toggle':
+        task.enabled = args.enabled;
+        return clone(task);
+      case 'timer_pick':
+        return '/tmp/real-looking.sh';
+      case 'timer_run':
+        run = {
+          id: 'run-1',
+          taskId: task.id,
+          revision: task.revision,
+          source: 'manual',
+          scheduledAt: '2026-12-01T01:00:00Z',
+          startedAt: '2026-12-01T01:00:00Z',
+          finishedAt: '2026-12-01T01:00:01Z',
+          status: 'failed',
+          exitCode: 23,
+          message: '受管进程异常退出',
+          stdout: '<script>untrusted()</script>',
+          stderr: 'Git Bash error detail',
+          truncated: false,
+          snapshot: clone(task),
+        };
+        return run.id;
+      case 'timer_run_detail':
+        return clone(run);
+      case 'timer_history':
+        return run ? [clone(run)] : [];
+      case 'timer_delete':
+        task = null;
+        return;
+      default:
+        throw Error(command);
+    }
+  };
+  const context = vm.createContext({
+    console,
+    document,
+    window: Object.assign(window, { confirm: () => true }),
+    navigator: { clipboard: { writeText: async () => {} } },
+    setInterval: () => 1,
+    clearInterval() {},
+    setTimeout: (f) => setTimeout(f, 5),
+    clearTimeout,
+  });
+  const cache = {};
+  function load(file) {
+    if (cache[file]) return cache[file];
+    const exports = {};
+    const source = ts.transpileModule(fs.readFileSync(path.join(__dirname, file), 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    }).outputText;
+    const requireMock = (name) =>
+      name === '@tauri-apps/api/core'
+        ? { invoke, isTauri: () => native }
+        : name.endsWith('html.ts')
+          ? {
+              escapeHTML: (v) =>
+                String(v).replace(
+                  /[&<>"']/g,
+                  (c) =>
+                    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+                ),
+            }
+          : name.endsWith('.css')
+            ? {}
+            : load(name.replace('./', ''));
+    const factory = vm.runInContext(`(function(require,exports){${source}\n})`, context);
+    factory(requireMock, exports);
+    cache[file] = exports;
+    return exports;
+  }
+  const { TasksView } = load('view.ts');
+  const view = new TasksView(document.querySelector('#tool'));
+  const $ = (s) => document.querySelector(s);
+  const click = (selector) => {
+    assert.ok($(selector), selector);
+    $(selector).dispatchEvent(new window.Event('click', { bubbles: true }));
+  };
+  const value = (selector, v, event = 'input') => {
+    assert.ok($(selector), selector);
+    $(selector).value = v;
+    $(selector).dispatchEvent(new window.Event(event, { bubbles: true }));
+  };
+  return {
+    view,
+    document,
+    window,
+    $,
+    click,
+    value,
+    calls,
+    setTask: (value) => {
+      task = clone(value);
+    },
+    setConfirmation: (value) => {
+      confirmation = value;
+    },
+    get task() {
+      return task;
+    },
+    get run() {
+      return run;
+    },
+  };
 }
-const settle=()=>new Promise(r=>setTimeout(r,30));
-test('actual task page uses native saved configuration and escaped real logs',async()=>{const h=harness();try{await settle();assert.match(h.document.body.textContent,/没有匹配任务/);h.click('[data-timer="new"]');await settle();assert.equal(h.calls.filter(c=>c.command==='timer_run').length,0);h.value('[data-field="name"]','真实任务');h.click('[data-timer="step"][data-step="1"]');await settle();assert.match(h.$('.timer-preview').textContent,/计划已校验/);h.click('[data-timer="cron-mode"][data-mode="advanced"]');h.value('[data-field="cron"]','bad cron');await settle();assert.match(h.$('.timer-preview').textContent,/Cron 无效/);assert.doesNotMatch(h.$('.timer-preview').textContent,/2026/);h.value('[data-field="cron"]','0 9 * * 1-5');h.click('[data-timer="step"][data-step="2"]');h.click('[data-timer="pick-target"]');await settle();assert.equal(h.$('[data-field="target"]').value,'/tmp/real-looking.sh');h.click('[data-timer="arg-add"]');h.value('[data-arg="0"]','中文 空格');h.click('[data-timer="arg-add"]');h.click('[data-timer="arg-up"][data-index="1"]');assert.equal(h.$('[data-arg="0"]').value,'');h.click('[data-timer="step"][data-step="3"]');h.click('[data-timer="save-enabled"]');await settle();assert.equal(h.task.enabled,true);assert.deepEqual(h.task.action.args.map(a=>a.value),['','中文 空格']);assert.equal(h.calls.filter(c=>c.command==='timer_run').length,0);h.setConfirmation(false);h.click('[data-timer="run"]');await settle();assert.equal(h.calls.filter(c=>c.command==='timer_run').length,0);h.setConfirmation(true);h.click('[data-timer="run"]');await settle();assert.equal(h.calls.filter(c=>c.command==='timer_run').length,1);assert.equal(h.calls.find(c=>c.command==='timer_run').args.id,'saved-task');assert.match(h.$('dialog pre').textContent,/<script>/);assert.match(h.$('dialog').textContent,/Git Bash error detail/);assert.match(h.$('dialog').textContent,/退出码 23/);assert.equal(h.$('dialog script'),null);h.click('[data-timer="close-log"]');h.click('[data-timer="toggle"]');await settle();assert.equal(h.task.enabled,false);h.click('[data-timer="history"]');await settle();assert.match(h.document.body.textContent,/真实任务/);h.click('[data-timer="log"]');await settle();assert.match(h.document.body.textContent,/执行配置快照/);}finally{h.view.dispose();}});
-test('browser page cannot execute or seed prototype tasks',async()=>{const h=harness(false);try{await settle();assert.match(h.document.body.textContent,/本机小工坊 App/);assert.equal(h.calls.length,0);}finally{h.view.dispose();}});
-test('dirty draft vetoes closure and dispose removes listeners',async()=>{const h=harness();try{await settle();h.click('[data-timer="new"]');await settle();h.value('[data-field="name"]','未保存');assert.equal(h.view.dirty(),true);h.setConfirmation(false);assert.equal(await h.view.canClose(),false);h.view.dispose();const before=h.calls.length;h.click('[data-timer="step"][data-step="1"]');await settle();assert.equal(h.calls.length,before);}finally{h.view.dispose();}});
+const settle = () => new Promise((r) => setTimeout(r, 30));
+test('actual task page uses native saved configuration and escaped real logs', async () => {
+  const h = harness();
+  try {
+    await settle();
+    assert.match(h.document.body.textContent, /没有匹配任务/);
+    h.click('[data-timer="new"]');
+    await settle();
+    assert.equal(h.calls.filter((c) => c.command === 'timer_run').length, 0);
+    h.value('[data-field="name"]', '真实任务');
+    h.click('[data-timer="step"][data-step="1"]');
+    await settle();
+    assert.match(h.$('.timer-preview').textContent, /计划已校验/);
+    h.click('[data-timer="cron-mode"][data-mode="advanced"]');
+    h.value('[data-field="cron"]', 'bad cron');
+    await settle();
+    assert.match(h.$('.timer-preview').textContent, /Cron 无效/);
+    assert.doesNotMatch(h.$('.timer-preview').textContent, /2026/);
+    h.value('[data-field="cron"]', '0 9 * * 1-5');
+    h.click('[data-timer="step"][data-step="2"]');
+    h.click('[data-timer="pick-target"]');
+    await settle();
+    assert.equal(h.$('[data-field="target"]').value, '/tmp/real-looking.sh');
+    h.click('[data-timer="arg-add"]');
+    h.value('[data-arg="0"]', '中文 空格');
+    h.click('[data-timer="arg-add"]');
+    h.click('[data-timer="arg-up"][data-index="1"]');
+    assert.equal(h.$('[data-arg="0"]').value, '');
+    h.click('[data-timer="step"][data-step="3"]');
+    h.click('[data-timer="save-enabled"]');
+    await settle();
+    assert.equal(h.task.enabled, true);
+    assert.deepEqual(
+      h.task.action.args.map((a) => a.value),
+      ['', '中文 空格'],
+    );
+    assert.equal(h.calls.filter((c) => c.command === 'timer_run').length, 0);
+    h.setConfirmation(false);
+    h.click('[data-timer="run"]');
+    await settle();
+    assert.equal(h.calls.filter((c) => c.command === 'timer_run').length, 0);
+    h.setConfirmation(true);
+    h.click('[data-timer="run"]');
+    await settle();
+    assert.equal(h.calls.filter((c) => c.command === 'timer_run').length, 1);
+    assert.equal(h.calls.find((c) => c.command === 'timer_run').args.id, 'saved-task');
+    assert.match(h.$('dialog pre').textContent, /<script>/);
+    assert.match(h.$('dialog').textContent, /Git Bash error detail/);
+    assert.match(h.$('dialog').textContent, /退出码 23/);
+    assert.equal(h.$('dialog script'), null);
+    h.click('[data-timer="close-log"]');
+    h.click('[data-timer="toggle"]');
+    await settle();
+    assert.equal(h.task.enabled, false);
+    h.click('[data-timer="history"]');
+    await settle();
+    assert.match(h.document.body.textContent, /真实任务/);
+    h.click('[data-timer="log"]');
+    await settle();
+    assert.match(h.document.body.textContent, /执行配置快照/);
+  } finally {
+    h.view.dispose();
+  }
+});
+test('browser page cannot execute or seed prototype tasks', async () => {
+  const h = harness(false);
+  try {
+    await settle();
+    assert.match(h.document.body.textContent, /本机小工坊 App/);
+    assert.equal(h.calls.length, 0);
+  } finally {
+    h.view.dispose();
+  }
+});
+test('dirty draft vetoes closure and dispose removes listeners', async () => {
+  const h = harness();
+  try {
+    await settle();
+    h.click('[data-timer="new"]');
+    await settle();
+    h.value('[data-field="name"]', '未保存');
+    assert.equal(h.view.dirty(), true);
+    h.setConfirmation(false);
+    assert.equal(await h.view.canClose(), false);
+    h.view.dispose();
+    const before = h.calls.length;
+    h.click('[data-timer="step"][data-step="1"]');
+    await settle();
+    assert.equal(h.calls.length, before);
+  } finally {
+    h.view.dispose();
+  }
+});
+
+test('native plugin timer preserves plugin id and explicit configuration revision without a shell', async () => {
+  const h = harness(true, 'windows');
+  try {
+    h.setTask({
+      id: 'native-task',
+      revision: 1,
+      name: 'native',
+      description: '',
+      enabled: false,
+      cron: '0 9 * * 1-5',
+      zone: 'UTC',
+      timeout: 3600,
+      action: {
+        kind: 'plugin',
+        target: 'test.sync',
+        pluginRevision: 1,
+        interpreter: '',
+        args: [],
+        env: [],
+        cwd: '',
+        instance: 'reuse',
+      },
+    });
+    await settle();
+    h.click('[data-timer="edit"]');
+    await settle();
+    h.click('[data-timer="step"][data-step="2"]');
+    assert.equal(h.$('[data-field="interpreter"]'), null);
+    assert.equal(h.$('[data-field="target"]').value, 'test.sync');
+    h.value('[data-field="plugin-revision"]', '2');
+    h.click('[data-timer="step"][data-step="3"]');
+    h.click('[data-timer="save-paused"]');
+    await settle();
+    assert.equal(h.task.action.pluginRevision, 2);
+    assert.equal(h.task.action.interpreter, '');
+    assert.deepEqual(h.task.action.args, []);
+  } finally {
+    h.view.dispose();
+  }
+});
+
+test('live task logs update the same dialog and follow output without overriding reader scroll', async () => {
+  const h = harness(true, 'windows');
+  try {
+    h.setTask({
+      id: 'live-task',
+      revision: 1,
+      name: '实时脚本',
+      description: '',
+      enabled: false,
+      cron: '0 9 * * 1-5',
+      zone: 'UTC',
+      timeout: 30,
+      action: {
+        kind: 'script',
+        target: 'C:\\scripts\\live.sh',
+        interpreter: 'C:\\Git\\git-bash.exe',
+        args: [],
+        env: [],
+        cwd: '',
+        instance: 'reuse',
+      },
+    });
+    await settle();
+    h.click('[data-timer="run"]');
+    await settle();
+    const dialog = h.$('dialog'),
+      pre = dialog.querySelector('pre');
+    Object.defineProperties(pre, {
+      scrollHeight: { value: 100, writable: true, configurable: true },
+      clientHeight: { value: 40, writable: true, configurable: true },
+      scrollTop: { value: 60, writable: true, configurable: true },
+    });
+    h.run.status = 'running';
+    h.run.exitCode = null;
+    h.run.finishedAt = null;
+    h.run.stdout = 'first-live\n<script>stream()</script>';
+    h.run.stderr = 'stderr-live';
+    h.run.message = '脚本执行中';
+    await h.view.poll();
+    assert.equal(h.$('dialog'), dialog);
+    assert.match(dialog.textContent, /执行中/);
+    assert.equal(pre.textContent, h.run.stdout);
+    assert.equal(pre.scrollTop, 100);
+    assert.equal(dialog.querySelector('script'), null);
+    assert.match(dialog.textContent, /1.5 秒/);
+    pre.scrollTop = 5;
+    pre.scrollHeight = 300;
+    h.run.stdout += '\nsecond-live';
+    await h.view.poll();
+    assert.equal(pre.scrollTop, 5);
+    assert.match(pre.textContent, /second-live/);
+    h.run.status = 'failed';
+    h.run.exitCode = 23;
+    h.run.finishedAt = '2026-12-01T01:00:03Z';
+    h.run.message = '脚本已结束';
+    await h.view.poll();
+    assert.match(dialog.textContent, /退出码 23/);
+    assert.match(dialog.textContent, /stderr-live/);
+  } finally {
+    h.view.dispose();
+  }
+});
