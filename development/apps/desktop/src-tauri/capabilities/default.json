@@ -5,5 +5,5 @@
   "windows": [
     "main"
   ],
-  "permissions": []
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
 }

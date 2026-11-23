@@ -56,7 +56,7 @@ class DeliveryTests(unittest.TestCase):
             migration.migrate(db)
             with sqlite3.connect(db) as connection:
                 self.assertEqual(connection.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
-                self.assertEqual(connection.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0], 1)
+                self.assertEqual(connection.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0], len(list((migration.ROOT / 'database/migrations').glob('*.sql'))))
 
     def test_changed_migration_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -84,18 +84,14 @@ class DeliveryTests(unittest.TestCase):
                 self.assertIsNone(connection.execute("SELECT name FROM sqlite_master WHERE name = 'example'").fetchone())
                 self.assertEqual(connection.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0], 0)
 
-    def test_run_schedule_deduplicates_and_cascades(self):
+    def test_fresh_database_has_only_current_runtime_tables(self):
         with tempfile.TemporaryDirectory() as directory:
             db = Path(directory) / 'test.db'
             migration.migrate(db)
             with sqlite3.connect(db) as connection:
-                connection.execute('PRAGMA foreign_keys = ON')
-                connection.execute("INSERT INTO scheduled_tasks(id,name,cron_expression,timezone,created_at,updated_at) VALUES ('task','reminder','0 9 * * *','Asia/Shanghai','now','now')")
-                connection.execute("INSERT INTO task_runs(id,task_id,scheduled_at,status) VALUES ('run','task','2026-11-20T01:00:00Z','pending')")
-                with self.assertRaises(sqlite3.IntegrityError):
-                    connection.execute("INSERT INTO task_runs(id,task_id,scheduled_at,status) VALUES ('duplicate','task','2026-11-20T01:00:00Z','pending')")
-                connection.execute("DELETE FROM scheduled_tasks WHERE id = 'task'")
-                self.assertEqual(connection.execute('SELECT COUNT(*) FROM task_runs').fetchone()[0], 0)
+                names = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                self.assertEqual(names, {'schema_migrations', 'timer_tasks', 'timer_runs'})
+                self.assertEqual(connection.execute('SELECT COUNT(*) FROM timer_tasks').fetchone()[0], 0)
 
 
 if __name__ == '__main__':

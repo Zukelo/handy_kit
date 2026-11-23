@@ -26,16 +26,68 @@ jobs:
           cache-dependency-path: development/apps/desktop/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
+          components: rustfmt, clippy
       - name: Install frontend dependencies
         working-directory: development/apps/desktop
         run: npm ci
+      - name: Check frontend formatting
+        working-directory: development/apps/desktop
+        run: npm run format:check
+      - name: Test workspace and home
+        working-directory: development/apps/desktop
+        run: npm test
       - name: Build frontend
         working-directory: development/apps/desktop
         run: npm run build
+      - name: Install local SCM test tools
+        run: sudo apt-get update && sudo apt-get install -y subversion
+      - name: Test shared process runtime
+        run: cargo test --manifest-path development/crates/process/Cargo.toml --locked
+      - name: Check Rust warnings
+        run: |
+          cargo clippy --manifest-path development/crates/process/Cargo.toml --all-targets --locked -- -D warnings
+          cargo clippy --manifest-path development/crates/scheduler/Cargo.toml --all-targets --locked -- -D warnings
+          cargo clippy --manifest-path development/crates/plugin-host/Cargo.toml --all-targets --locked -- -D warnings
+      - name: Test Rust timer core
+        run: cargo test --manifest-path development/crates/scheduler/Cargo.toml --locked
+      - name: Test native plugin host
+        env:
+          HANDYKIT_REQUIRE_SCM_TESTS: '1'
+        run: cargo test --manifest-path development/crates/plugin-host/Cargo.toml --locked
       - name: Check Rust formatting
-        run: cargo fmt --manifest-path development/apps/desktop/src-tauri/Cargo.toml -- --check
+        run: |
+          cargo fmt --manifest-path development/apps/desktop/src-tauri/Cargo.toml -- --check
+          cargo fmt --manifest-path development/crates/process/Cargo.toml -- --check
+          cargo fmt --manifest-path development/crates/scheduler/Cargo.toml -- --check
+          cargo fmt --manifest-path development/crates/plugin-host/Cargo.toml -- --check
       - name: Check migration and release tooling
         run: python3 -m unittest discover -s scripts/tests -v
+      - name: Check shared design system and theme contrast
+        run: python3 scripts/check_design_system.py
+      - name: Check appearance controller
+        run: node --test scripts/test_appearance.cjs
       - name: Check version consistency
         run: python3 scripts/check_version.py
+
+  timer-platforms:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Locate Git for Windows for shell regression
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $gitRoot = Split-Path (Split-Path (Get-Command git.exe).Source)
+          if (!(Test-Path "$gitRoot\usr\bin\bash.exe")) { throw "Git Bash interpreter missing" }
+          "HANDYKIT_TEST_GIT_ROOT=$gitRoot" >> $env:GITHUB_ENV
+      - name: Test platform process runtime
+        run: cargo test --manifest-path development/crates/process/Cargo.toml --locked
+      - name: Test platform executor and scheduler
+        run: cargo test --manifest-path development/crates/scheduler/Cargo.toml --locked
+      - name: Test platform plugin host
+        run: cargo test --manifest-path development/crates/plugin-host/Cargo.toml --locked

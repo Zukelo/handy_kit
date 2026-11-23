@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>小工坊 · 设计规范与主题组件</title>
+  <script src="appearance.js"></script>
+  <link rel="stylesheet" href="design-tokens.css">
+  <link rel="stylesheet" href="design-components.css">
+  <link rel="stylesheet" href="preview.css">
+</head>
+<body>
+<header class="spec-header"><div><span class="spec-eyebrow">HANDYKIT DESIGN SYSTEM / 1.0</span><h1>清晰、有序，适合长时间工作。</h1><p>macOS 风格的语义色彩与桌面组件规范</p></div><label class="appearance-control"><span>页面外观</span><select data-appearance aria-label="外观主题"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label></header>
+<main class="spec-main">
+  <section class="spec-intro"><p>正文使用中性色，交互使用蓝色，状态同时以颜色与文字表达。浅色和深色分别定义内容层级；下方两列始终展示对应主题，可直接比较。</p><p><a href="../02-界面设计规范.md">阅读完整规范</a> · <a href="../../prototypes/tasks/index.html">打开定时任务原型</a></p></section>
+  <div class="theme-comparison">
+    <section class="theme-frame" data-theme="light"><h2>浅色 <span>Light</span></h2><div class="sample-caption">明亮背景 · 深色文字 · 明确控件边界</div><div class="swatches"><div style="--swatch:var(--hk-canvas)"><i></i>画布</div><div style="--swatch:var(--hk-surface)"><i></i>内容表面</div><div style="--swatch:var(--hk-accent)"><i></i>交互蓝</div><div style="--swatch:var(--hk-text-primary)"><i></i>正文</div></div><div class="sample-card"><h3>每日项目备份</h3><p>每周一至周五 18:00 执行，将项目归档到本地目录。</p><div class="sample-buttons"><button class="button primary" data-demo="主要操作">新建任务</button><button class="button" data-demo="次要操作">编辑任务</button><button class="button" disabled>不可用</button></div><label class="field">任务名称<input placeholder="例如：每日项目备份"></label><label class="field">执行计划<input value="0 18 * * 1-5" class="code-sample"></label><div class="sample-focus"><span>键盘焦点</span><button class="button focus-demo" data-demo="焦点状态">下一步</button></div><div class="sample-badges"><span class="badge succeeded">执行成功</span><span class="badge running">执行中</span><span class="badge failed">执行失败</span><span class="badge launched">启动请求成功</span></div><div class="sample-info">窗口关闭后继续在菜单栏 / 托盘运行。</div></div><div class="text-levels"><strong>主要文字 · 任务与内容</strong><p>次要文字 · 说明和辅助信息</p><small>辅助文字也必须保持可读，不再使用淡色正文。</small></div></section>
+    <section class="theme-frame" data-theme="dark"><h2>深色 <span>Dark</span></h2><div class="sample-caption">分层深灰 · 明亮文字 · 独立深色语义色</div><div class="swatches"><div style="--swatch:var(--hk-canvas)"><i></i>画布</div><div style="--swatch:var(--hk-surface)"><i></i>内容表面</div><div style="--swatch:var(--hk-accent)"><i></i>交互蓝</div><div style="--swatch:var(--hk-text-primary)"><i></i>正文</div></div><div class="sample-card"><h3>每日项目备份</h3><p>每周一至周五 18:00 执行，将项目归档到本地目录。</p><div class="sample-buttons"><button class="button primary" data-demo="主要操作">新建任务</button><button class="button" data-demo="次要操作">编辑任务</button><button class="button" disabled>不可用</button></div><label class="field">任务名称<input placeholder="例如：每日项目备份"></label><label class="field">执行计划<input value="0 18 * * 1-5" class="code-sample"></label><div class="sample-focus"><span>键盘焦点</span><button class="button focus-demo" data-demo="焦点状态">下一步</button></div><div class="sample-badges"><span class="badge succeeded">执行成功</span><span class="badge running">执行中</span><span class="badge failed">执行失败</span><span class="badge launched">启动请求成功</span></div><div class="sample-info">窗口关闭后继续在菜单栏 / 托盘运行。</div></div><div class="text-levels"><strong>主要文字 · 任务与内容</strong><p>次要文字 · 说明和辅助信息</p><small>辅助文字也必须保持可读，不再使用淡色正文。</small></div></section>
+  </div>
+  <section class="spec-notes"><h2>统一的组件状态</h2><p>默认、悬停、按下、焦点、选中、禁用、错误和加载均使用语义 tokens；颜色不承担唯一的信息表达。</p><p>普通文字 ≥ 4.5:1；必要的非文字控件提示与焦点 ≥ 3:1。当前检查覆盖 94 组指定配色，不代替完整无障碍实机验收。</p><p role="status" id="demo-status">点击样例按钮可以查看反馈；不会保存任务或执行程序。</p></section>
+</main><script src="preview.js"></script>
+</body></html>

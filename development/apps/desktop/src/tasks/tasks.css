@@ -1,0 +1,450 @@
+.tasks-view {
+  max-width: 1600px;
+  margin: auto;
+  color: var(--hk-text-primary);
+  font-size: var(--hk-text-body);
+}
+.tasks-view h1 {
+  font-size: var(--hk-text-title);
+  margin: 0;
+}
+.tasks-view h2 {
+  font-size: var(--hk-text-section);
+  margin: 0 0 20px;
+}
+.tasks-view h3 {
+  font-size: var(--hk-text-body);
+  margin: 20px 0 10px;
+}
+.tasks-view .timer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.timer-header p {
+  color: var(--hk-text-secondary);
+  margin: 8px 0;
+}
+.tasks-view .timer-actions,
+.timer-row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.tasks-view .button {
+  white-space: nowrap;
+  padding: 6px 12px;
+  font-size: var(--hk-text-label);
+}
+.tasks-view .timer-error,
+.timer-warning,
+.timer-notice {
+  border: 1px solid var(--hk-separator);
+  border-radius: var(--hk-radius-control);
+  padding: 12px 16px;
+  line-height: 1.6;
+  margin: 12px 0 20px;
+}
+.tasks-view .timer-error {
+  color: var(--hk-danger);
+  background: var(--hk-danger-bg);
+  border-color: var(--hk-danger);
+}
+.tasks-view .timer-warning {
+  color: var(--hk-warning);
+  background: var(--hk-warning-bg);
+}
+.tasks-view .timer-notice {
+  color: var(--hk-text-secondary);
+  background: var(--hk-surface-inset);
+}
+.tasks-view .timer-muted {
+  color: var(--hk-text-secondary);
+  font-size: var(--hk-text-caption);
+  line-height: 1.6;
+}
+.tasks-view .timer-danger {
+  color: var(--hk-danger);
+}
+.tasks-view .timer-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 20px 0;
+}
+.timer-stats > div {
+  background: var(--hk-surface);
+  border: 1px solid var(--hk-separator);
+  border-radius: var(--hk-radius-card);
+  padding: 16px;
+  color: var(--hk-text-secondary);
+}
+.timer-stats strong {
+  display: block;
+  font-size: 24px;
+  color: var(--hk-text-primary);
+  margin-bottom: 6px;
+}
+.tasks-view .timer-toolbar {
+  display: flex;
+  gap: 12px;
+  margin: 20px 0;
+  align-items: center;
+}
+.tasks-view input,
+.tasks-view select,
+.tasks-view textarea {
+  padding: 7px 10px;
+  min-width: 0;
+}
+.tasks-view .timer-toolbar input {
+  flex: 1;
+  max-width: 360px;
+}
+.tasks-view .timer-table-scroll {
+  overflow: auto;
+  border: 1px solid var(--hk-separator);
+  border-radius: var(--hk-radius-card);
+}
+.tasks-view .timer-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  background: var(--hk-surface);
+  font-size: var(--hk-text-label);
+}
+.timer-table th {
+  background: var(--hk-toolbar);
+  color: var(--hk-text-secondary);
+  font-weight: 500;
+}
+.timer-table th,
+.timer-table td {
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--hk-separator);
+  vertical-align: middle;
+}
+.timer-table small {
+  display: block;
+  margin-top: 6px;
+  font-size: var(--hk-text-caption);
+  color: var(--hk-text-secondary);
+}
+.timer-table tbody tr:hover {
+  background: var(--hk-hover);
+}
+.timer-table .timer-danger {
+  color: var(--hk-danger);
+}
+.timer-table .text-button {
+  padding: 0;
+  text-align: left;
+  font-size: var(--hk-text-body);
+}
+.timer-path {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.timer-id {
+  display: none;
+}
+.timer-empty {
+  text-align: center;
+  padding: 48px !important;
+}
+.tasks-view .timer-badge {
+  display: inline-block;
+  padding: 4px 7px;
+  border-radius: 4px;
+  background: var(--hk-surface-inset);
+  color: var(--hk-text-secondary);
+  white-space: nowrap;
+  font-size: var(--hk-text-caption);
+}
+.timer-badge.succeeded {
+  background: var(--hk-success-bg);
+  color: var(--hk-success);
+}
+.timer-badge.running {
+  background: var(--hk-info-bg);
+  color: var(--hk-info);
+}
+.timer-badge.failed,
+.timer-badge.timed_out {
+  background: var(--hk-danger-bg);
+  color: var(--hk-danger);
+}
+.timer-badge.launched {
+  background: var(--hk-purple-bg);
+  color: var(--hk-purple);
+}
+.tasks-view .timer-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 285px;
+  gap: 20px;
+  align-items: start;
+}
+.timer-editor > section {
+  min-width: 0;
+}
+.tasks-view .timer-card,
+.timer-preview {
+  background: var(--hk-surface);
+  border: 1px solid var(--hk-separator);
+  border-radius: var(--hk-radius-card);
+  padding: 24px;
+}
+.timer-preview {
+  padding: 18px;
+  position: sticky;
+  top: 0;
+}
+.timer-preview code {
+  color: var(--hk-code-text);
+  font-family: var(--hk-font-mono);
+  overflow-wrap: anywhere;
+}
+.timer-preview p {
+  line-height: 1.6;
+}
+.timer-preview ol {
+  padding-left: 24px;
+  font-size: var(--hk-text-caption);
+  color: var(--hk-text-secondary);
+  line-height: 2.1;
+}
+.timer-preview small {
+  display: block;
+  color: var(--hk-text-secondary);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.timer-preview .timer-preview-path {
+  display: block;
+  font-size: var(--hk-text-label);
+}
+.tasks-view .timer-steps,
+.timer-segments {
+  display: flex;
+  border: 1px solid var(--hk-separator);
+  border-radius: var(--hk-radius-control);
+  overflow: hidden;
+  background: var(--hk-surface-inset);
+  margin-bottom: 16px;
+}
+.timer-steps button,
+.timer-segments button {
+  flex: 1;
+  padding: 12px 4px;
+  color: var(--hk-text-secondary);
+  font-size: var(--hk-text-label);
+}
+.timer-steps button.selected,
+.timer-segments button.selected {
+  background: var(--hk-selection);
+  color: var(--hk-selection-text);
+  font-weight: 600;
+}
+.timer-steps button:not(:last-child),
+.timer-segments button:not(:last-child) {
+  border-right: 1px solid var(--hk-separator);
+}
+.timer-editor-bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.tasks-view .timer-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 20px 0;
+  font-size: var(--hk-text-label);
+  color: var(--hk-text-secondary);
+}
+.timer-field small {
+  font-size: var(--hk-text-caption);
+  line-height: 1.6;
+}
+.timer-field input,
+.timer-field textarea,
+.timer-field select {
+  width: 100%;
+}
+.tasks-view .timer-path-picker {
+  display: flex;
+  gap: 8px;
+}
+.timer-path-picker input {
+  flex: 1;
+}
+.tasks-view .timer-cron-result {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--hk-surface-inset);
+  padding: 10px 14px;
+  border: 1px solid var(--hk-control-border);
+  border-radius: var(--hk-radius-control);
+  margin: 20px 0;
+}
+.timer-cron-result code {
+  font-size: 18px;
+  color: var(--hk-code-text);
+}
+.tasks-view .timer-days {
+  border: 0;
+  padding: 0;
+  margin: 20px 0;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.timer-days legend {
+  margin-bottom: 12px;
+  font-size: var(--hk-text-label);
+  color: var(--hk-text-secondary);
+}
+.timer-days label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tasks-view .timer-cron-field {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 12px 0;
+  align-items: end;
+}
+.timer-cron-field label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tasks-view .timer-argument {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto 24px 24px 24px;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0;
+}
+.timer-argument label,
+.timer-env label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  font-size: var(--hk-text-caption);
+}
+.timer-argument button,
+.timer-env button {
+  min-height: 28px;
+  color: var(--hk-accent-text);
+}
+.tasks-view .timer-env {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) auto 24px;
+  gap: 6px;
+  align-items: center;
+  margin: 10px 0;
+}
+.tasks-view .timer-definition {
+  display: grid;
+  grid-template-columns: 115px minmax(0, 1fr);
+  gap: 14px;
+  margin: 24px 0;
+}
+.timer-definition dt {
+  color: var(--hk-text-secondary);
+}
+.timer-definition dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+.tasks-view .timer-log {
+  width: min(850px, 90vw);
+  max-height: 85vh;
+  padding: 24px;
+  border: 1px solid var(--hk-control-border);
+  color: var(--hk-text-primary);
+  background: var(--hk-surface-raised);
+  border-radius: var(--hk-radius-dialog);
+  box-shadow: var(--hk-shadow);
+}
+.timer-log::backdrop {
+  background: var(--hk-backdrop);
+}
+.timer-log .timer-header {
+  gap: 20px;
+}
+.timer-log h2 {
+  margin: 0;
+}
+.timer-log pre {
+  padding: 14px;
+  max-height: 220px;
+  overflow: auto;
+  background: var(--hk-surface-inset);
+  color: var(--hk-code-text);
+  font: var(--hk-text-label) / 1.6 var(--hk-font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: var(--hk-radius-control);
+}
+.timer-quit {
+  width: 480px;
+  max-width: 90vw;
+  padding: 24px;
+  border: 1px solid var(--hk-control-border);
+  border-radius: var(--hk-radius-dialog);
+  color: var(--hk-text-primary);
+  background: var(--hk-surface-raised);
+  box-shadow: var(--hk-shadow);
+}
+.timer-quit p {
+  line-height: 1.6;
+}
+.timer-quit .timer-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.timer-quit .button {
+  padding: 8px 12px;
+}
+@media (max-width: 1150px) {
+  .tasks-view .timer-editor {
+    grid-template-columns: 1fr;
+  }
+  .tasks-view .timer-preview {
+    position: static;
+  }
+  .timer-preview ol {
+    columns: 2;
+  }
+  .tasks-view .timer-table {
+    min-width: 850px;
+  }
+  .tasks-view .timer-stats {
+    gap: 8px;
+  }
+  .timer-stats > div {
+    padding: 12px;
+  }
+}
+
+.tool-status.available {
+  color: var(--hk-success);
+  background: var(--hk-success-bg);
+  border-color: var(--hk-success);
+}
