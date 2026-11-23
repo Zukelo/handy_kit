@@ -664,9 +664,10 @@ exit 23
         .ends_with(expected));
     let text = std::fs::read_to_string(marker).unwrap();
     assert!(
-        text.lines()
-            .next()
-            .is_some_and(|line| line == "MINGW64" || line == "MINGW32" || line == "CLANGARM64"),
+        text.lines().next().is_some_and(|line| matches!(
+            line,
+            "MINGW64" | "MINGW32" | "UCRT64" | "CLANG64" | "CLANGARM64"
+        )),
         "{text}"
     );
 }
